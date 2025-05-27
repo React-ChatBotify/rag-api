@@ -9,6 +9,8 @@ import { config } from './config';
 import { customRouter } from './routers/custom';
 import { geminiRouter } from './routers/gemini';
 import { openaiRouter } from './routers/openai';
+import { ragManagementRouter } from './routers/ragManagement';
+import { ragQueryRouter } from './routers/ragQuery'; // Added import
 import swaggerDocument from './swagger';
 
 const app = express();
@@ -19,6 +21,8 @@ app.use(cors());
 app.use(`${API_PREFIX}/`, openaiRouter);
 app.use(`${API_PREFIX}/`, geminiRouter);
 app.use(`${API_PREFIX}/`, customRouter);
+app.use(`${API_PREFIX}/rag/manage`, ragManagementRouter);
+app.use(`${API_PREFIX}/rag`, ragQueryRouter); // Added new router for public queries
 
 // grab all swagger path files
 const swaggerDir = path.join(__dirname, './swagger');

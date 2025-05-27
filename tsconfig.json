@@ -10,7 +10,8 @@
     "strict": true,
     "skipLibCheck": true,
     "types": [
-      "node"
+      "node",
+      "jest" // Added jest here
     ],
     "typeRoots": [
       "./node_modules/@types",
