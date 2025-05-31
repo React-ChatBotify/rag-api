@@ -27,7 +27,7 @@ then
 fi
 
 # pull the latest image
-docker pull tjtanjin/llm-proxy:main
+docker pull React-ChatBotify/rag-api:main
 
 # run new docker container
-docker run -d --restart always --name $1 --env-file ./.env tjtanjin/llm-proxy:main
+docker run -d --restart always --name $1 --env-file ./.env React-ChatBotify/rag-api:main

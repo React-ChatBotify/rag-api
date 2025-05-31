@@ -1,12 +1,12 @@
 version: '3.8'
 
 services:
-  llm-proxy:
+  api:
     build:
       context: ..
       dockerfile: ./docker/Dockerfile.dev
     ports:
-      - "${PORT:-8000}:8000"
+      - "${PORT:-8080}:8080"
     volumes:
       - ..:/app
       - /app/node_modules
@@ -17,10 +17,10 @@ services:
 
   chromadb:
     image: chromadb/chroma
-    ports:
-      - "8001:8000"
     volumes:
       - chroma-data:/chroma/chroma
+    env_file:
+      - ../config/env/.env.development
 
 volumes:
   chroma-data:

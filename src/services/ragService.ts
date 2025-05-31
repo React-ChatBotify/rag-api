@@ -1,4 +1,4 @@
-import { ChromaClient, ChromaCollection } from 'chromadb-client';
+import { ChromaClient } from 'chromadb-client';
 // import { pipeline, Pipeline } from '@xenova/transformers'; // Removed
 import { marked } from 'marked';
 import { v4 as uuidv4 } from 'uuid';
@@ -12,7 +12,7 @@ export class RAGService {
     private chromaClient: ChromaClient;
     // private embeddingGenerator: EmbeddingGenerator; // Removed
     private collectionName: string = "rag_documents";
-    private chromaCollection: ChromaCollection | undefined;
+    private chromaCollection: any | undefined;
 
     constructor() {
         const fetchOpts: RequestInit = {};
@@ -37,7 +37,7 @@ export class RAGService {
         }
 
         this.chromaClient = new ChromaClient({
-            path: config.chromaUrl,
+            path: `${config.chromaUrl}:${config.chromaPort}`,
             fetchOptions: Object.keys(fetchOpts).length > 0 ? fetchOpts : undefined
         });
         // this.embeddingGenerator = new EmbeddingGenerator(); // Removed

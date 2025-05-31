@@ -1,10 +1,10 @@
 <p align="center">
-  <img width="200px" src="https://raw.githubusercontent.com/tjtanjin/llm-proxy/main/assets/logo.png" />
+  <img width="200px" src="https://raw.githubusercontent.com/React-ChatBotify/rag-api/main/assets/logo.png" />
   <h1 align="center">LLM Proxy</h1>
 </p>
 
 <p align="center">
-  <a href="https://github.com/tjtanjin/llm-proxy/actions/workflows/ci-cd-pipeline.yml"> <img src="https://github.com/tjtanjin/llm-proxy/actions/workflows/ci-cd-pipeline.yml/badge.svg" /> </a>
+  <a href="https://github.com/React-ChatBotify/rag-api/actions/workflows/ci-cd-pipeline.yml"> <img src="https://github.com/React-ChatBotify/rag-api/actions/workflows/ci-cd-pipeline.yml/badge.svg" /> </a>
 </p>
 
 ## Table of Contents
@@ -89,7 +89,7 @@ Hugging Face Transformers (via @xenova/transformers.js)
 </p>
 
 #### Project Repository
-- https://github.com/tjtanjin/llm-proxy
+- https://github.com/React-ChatBotify/rag-api
 
 ### Environment Configuration
 Before running the application, you need to set up your environment variables.
@@ -98,7 +98,7 @@ Before running the application, you need to set up your environment variables.
     cp .env.example .env
     ```
 2.  Edit the `.env` file and provide the necessary values:
-    *   `PORT`: Port for the application (defaults to 8000).
+    *   `PORT`: Port for the application (defaults to 8080).
     *   `LLM_API_KEY`: Your OpenAI API key (if using OpenAI). (Note: The original template used `GEMINI_API_KEY` and `OPENAI_API_KEY`. This should be updated or clarified based on which keys are actively used by the proxy part).
     *   `OPENAI_API_KEY`: Your OpenAI API key.
     *   `GEMINI_API_KEY`: Your Google Gemini API key.
@@ -115,12 +115,12 @@ The recommended way to deploy the project, including the RAG service and ChromaD
     docker-compose up -d --build
     ```
     This command will:
-    *   Build the `llm-proxy` service image.
+    *   Build the `rag-api` service image.
     *   Pull the `chromadb/chroma` image for ChromaDB.
     *   Start both services.
     *   Create a persistent volume for ChromaDB data (`chroma-data`).
 3.  **Accessing the Service:**
-    *   The LLM Proxy will be available at `http://localhost:${PORT}` (e.g., `http://localhost:8000`).
+    *   The LLM Proxy will be available at `http://localhost:${PORT}` (e.g., `http://localhost:8080`).
     *   ChromaDB's API (if needed for direct interaction, though usually not required) will be available at `http://localhost:8001` (as mapped in `docker-compose.yml`).
     *   API documentation (Swagger UI) is available at `http://localhost:${PORT}/api/v1/docs`.
 
@@ -129,8 +129,8 @@ If you prefer to run the services separately or manage them manually:
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/tjtanjin/llm-proxy.git
-    cd llm-proxy
+    git clone https://github.com/React-ChatBotify/rag-api.git
+    cd rag-api
     ```
 2.  **Install dependencies:**
     ```bash
@@ -140,7 +140,7 @@ If you prefer to run the services separately or manage them manually:
 4.  **Run ChromaDB:**
     You can run ChromaDB using Docker separately if you're not using `docker-compose`:
     ```bash
-    docker run -d -p 8001:8000 --name chromadb -v chroma-data:/chroma/chroma chromadb/chroma
+    docker run -d -p 8000:8000 --name chromadb -v chroma-data:/chroma/chroma chromadb/chroma
     ```
     Ensure your `CHROMA_URL` in `.env` points to `http://localhost:8001` in this case.
 5.  **Run the LLM Proxy application:**
@@ -206,14 +206,14 @@ This endpoint is public and used to query the RAG system.
 
 Replace `your_secure_api_key_here` with the value of `RAG_API_KEY` from your `.env` file.
 Replace `/path/to/your/document.md` with the actual path to a Markdown file.
-The default port `8000` is used in these examples.
+The default port `8080` is used in these examples.
 
 1.  **Upload a document:**
     ```bash
     curl -X POST -H "X-API-Key: your_secure_api_key_here" \
          -F "documentId=my_test_doc_01" \
          -F "markdownFile=@/path/to/your/document.md" \
-         http://localhost:8000/api/v1/rag/manage/documents
+         http://localhost:8080/api/v1/rag/manage/documents
     ```
 
 2.  **Query the RAG system:**
@@ -223,7 +223,7 @@ The default port `8000` is used in these examples.
                "query": "What is the main content of my_test_doc_01?",
                "stream": false
              }' \
-         http://localhost:8000/api/v1/rag/query
+         http://localhost:8080/api/v1/rag/query
     ```
     To stream the response:
     ```bash
@@ -232,19 +232,19 @@ The default port `8000` is used in these examples.
                "query": "Summarize my_test_doc_01 for me.",
                "stream": true
              }' \
-         http://localhost:8000/api/v1/rag/query
+         http://localhost:8080/api/v1/rag/query
     ```
 
 3.  **Get a document's content:**
     ```bash
     curl -X GET -H "X-API-Key: your_secure_api_key_here" \
-         http://localhost:8000/api/v1/rag/manage/documents/my_test_doc_01
+         http://localhost:8080/api/v1/rag/manage/documents/my_test_doc_01
     ```
 
 4.  **Delete a document:**
     ```bash
     curl -X DELETE -H "X-API-Key: your_secure_api_key_here" \
-         http://localhost:8000/api/v1/rag/manage/documents/my_test_doc_01
+         http://localhost:8080/api/v1/rag/manage/documents/my_test_doc_01
     ```
 
 ### Team
@@ -253,7 +253,7 @@ The default port `8000` is used in these examples.
 ### Contributing
 Given the simplicity and narrowly scoped purpose of this project, there is **no developer guide**. Feel free to submit pull requests if you wish to make improvements or fixes.
 
-Alternatively, you may contact me via [**discord**](https://discord.gg/X8VSdZvBQY) or simply raise bugs or suggestions by opening an [**issue**](https://github.com/tjtanjin/llm-proxy/issues).
+Alternatively, you may contact me via [**discord**](https://discord.gg/X8VSdZvBQY) or simply raise bugs or suggestions by opening an [**issue**](https://github.com/React-ChatBotify/rag-api/issues).
 
 ### Others
 For any questions regarding the implementation of the project, you may reach out on [**discord**](https://discord.gg/X8VSdZvBQY) or drop an email to: cjtanjin@gmail.com.

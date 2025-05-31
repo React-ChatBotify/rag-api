@@ -45,8 +45,8 @@ COPY --from=build /app/node_modules ./node_modules
 # Copy additional files needed for runtime
 COPY package.json ./
 
-# Expose service on port 8000
-EXPOSE 8000
+# Expose service on port 8080
+EXPOSE 8080
 
 # Start the application
 CMD ["node", "./build/index.js"]
