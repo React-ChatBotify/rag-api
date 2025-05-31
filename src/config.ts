@@ -10,5 +10,9 @@ export const config = {
 	port: process.env.PORT || 8000,
 	ragApiKey: process.env.RAG_API_KEY!,
 	chromaUrl: process.env.CHROMA_URL!,
-	embeddingModelName: process.env.EMBEDDING_MODEL_NAME!,
+	chromaTenant: process.env.CHROMA_TENANT || 'default_tenant',
+	chromaDatabase: process.env.CHROMA_DATABASE || 'default_database',
+	chromaAuthToken: process.env.CHROMA_AUTH_TOKEN,
+	chromaUsername: process.env.CHROMA_USERNAME,
+	chromaPassword: process.env.CHROMA_PASSWORD,
 };

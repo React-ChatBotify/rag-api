@@ -6,11 +6,11 @@ import path from 'path';
 import swaggerUi from 'swagger-ui-express';
 
 import { config } from './config';
-import { customRouter } from './routers/custom';
-import { geminiRouter } from './routers/gemini';
-import { openaiRouter } from './routers/openai';
+// import { customRouter } from './routers/custom'; // Removed
+// import { geminiRouter } from './routers/gemini'; // Removed
+// import { openaiRouter } from './routers/openai'; // Removed
 import { ragManagementRouter } from './routers/ragManagement';
-import { ragQueryRouter } from './routers/ragQuery'; // Added import
+import { ragQueryRouter } from './routers/ragQuery';
 import swaggerDocument from './swagger';
 
 const app = express();
@@ -18,11 +18,11 @@ const app = express();
 const API_PREFIX = `/api/${process.env.API_VERSION || 'v1'}`;
 app.use(bodyParser.json());
 app.use(cors());
-app.use(`${API_PREFIX}/`, openaiRouter);
-app.use(`${API_PREFIX}/`, geminiRouter);
-app.use(`${API_PREFIX}/`, customRouter);
+// app.use(`${API_PREFIX}/`, openaiRouter); // Removed
+// app.use(`${API_PREFIX}/`, geminiRouter); // Removed
+// app.use(`${API_PREFIX}/`, customRouter); // Removed
 app.use(`${API_PREFIX}/rag/manage`, ragManagementRouter);
-app.use(`${API_PREFIX}/rag`, ragQueryRouter); // Added new router for public queries
+app.use(`${API_PREFIX}/rag`, ragQueryRouter);
 
 // grab all swagger path files
 const swaggerDir = path.join(__dirname, './swagger');

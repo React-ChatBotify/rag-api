@@ -1,55 +1,59 @@
 import { ChromaClient, ChromaCollection } from 'chromadb-client';
-import { pipeline, Pipeline } from '@xenova/transformers';
+// import { pipeline, Pipeline } from '@xenova/transformers'; // Removed
 import { marked } from 'marked';
 import { v4 as uuidv4 } from 'uuid';
+import { Buffer } from 'buffer'; // Added for Basic Auth
 import { config } from '../config';
+import { generateEmbeddings } from '../services/llmWrapper'; // Added
 
-class EmbeddingGenerator {
-    private static instance: Pipeline | null = null;
+// EmbeddingGenerator class removed
 
-    private constructor() { } // Private constructor to prevent direct instantiation
-
-    public static async getInstance(): Promise<Pipeline> {
-        if (!EmbeddingGenerator.instance) {
-            try {
-                console.info(`Initializing embedding model: ${config.embeddingModelName}`);
-                EmbeddingGenerator.instance = await pipeline('feature-extraction', config.embeddingModelName);
-                console.info("Embedding model initialized successfully.");
-            } catch (error) {
-                console.error("Failed to initialize embedding pipeline:", error);
-                throw error; // Propagate error
-            }
-        }
-        return EmbeddingGenerator.instance;
-    }
-
-    public async generate(text: string): Promise<number[]> {
-        const pipelineInstance = await EmbeddingGenerator.getInstance();
-        const result = await pipelineInstance(text, { pooling: 'mean', normalize: true });
-        return Array.from(result.data as Float32Array);
-    }
-}
-
-export class RAGService { // Added export here
+export class RAGService {
     private chromaClient: ChromaClient;
-    private embeddingGenerator: EmbeddingGenerator;
+    // private embeddingGenerator: EmbeddingGenerator; // Removed
     private collectionName: string = "rag_documents";
     private chromaCollection: ChromaCollection | undefined;
 
     constructor() {
-        this.chromaClient = new ChromaClient({ path: config.chromaUrl });
-        this.embeddingGenerator = new EmbeddingGenerator();
+        const fetchOpts: RequestInit = {};
+        const headers: Record<string, string> = {};
+
+        if (config.chromaAuthToken) {
+            headers['Authorization'] = `Bearer ${config.chromaAuthToken}`;
+        } else if (config.chromaUsername && config.chromaPassword) {
+            const basicAuth = Buffer.from(`${config.chromaUsername}:${config.chromaPassword}`).toString('base64');
+            headers['Authorization'] = `Basic ${basicAuth}`;
+        }
+
+        if (config.chromaTenant && config.chromaTenant !== 'default_tenant') {
+           headers['X-Chroma-Tenant'] = config.chromaTenant;
+        }
+        if (config.chromaDatabase && config.chromaDatabase !== 'default_database') {
+           headers['X-Chroma-Database'] = config.chromaDatabase;
+        }
+
+        if (Object.keys(headers).length > 0) {
+           fetchOpts.headers = headers;
+        }
+
+        this.chromaClient = new ChromaClient({
+            path: config.chromaUrl,
+            fetchOptions: Object.keys(fetchOpts).length > 0 ? fetchOpts : undefined
+        });
+        // this.embeddingGenerator = new EmbeddingGenerator(); // Removed
     }
 
     public async init(): Promise<void> {
+        // The tenant and database are now configured at the client level via headers.
+        // The collection name itself does not usually include tenant/database prefixes with this client setup.
         try {
             this.chromaCollection = await this.chromaClient.getOrCreateCollection({
                 name: this.collectionName,
-                // Optional: metadata: { "hnsw:space": "cosine" } // if you want to specify distance function
+                // Optional: metadata: { "hnsw:space": "cosine" }
             });
-            console.info(`ChromaDB collection '${this.collectionName}' ensured.`);
+            console.info(`ChromaDB collection '${this.collectionName}' ensured for tenant '${config.chromaTenant}' and database '${config.chromaDatabase}'.`);
         } catch (error) {
-            console.error("Error initializing ChromaDB collection:", error);
+            console.error(`Error initializing ChromaDB collection for tenant '${config.chromaTenant}', database '${config.chromaDatabase}':`, error);
             throw error; // Propagate error to be handled by application startup
         }
     }
@@ -91,7 +95,17 @@ export class RAGService { // Added export here
 
         for (const chunk of chunks) {
             ids.push(chunk.id);
-            const embedding = await this.embeddingGenerator.generate(chunk.text);
+            // const embedding = await this.embeddingGenerator.generate(chunk.text); // Old
+            const embeddingResponse = await generateEmbeddings({
+                provider: 'gemini', // Defaulting to gemini for RAG embeddings
+                text: chunk.text,
+            });
+            if (!embeddingResponse || !embeddingResponse.embeddings || embeddingResponse.embeddings.length === 0 || !embeddingResponse.embeddings[0].embedding) {
+                console.error(`Failed to generate embedding for chunk ID: ${chunk.id} with provider 'gemini'. Skipping.`);
+                // Potentially skip this chunk or throw an error to halt the process
+                continue;
+            }
+            const embedding = embeddingResponse.embeddings[0].embedding;
             embeddings.push(embedding);
             metadatas.push({
                 text_chunk: chunk.text, // Storing the cleaned chunk text
@@ -211,7 +225,16 @@ export class RAGService { // Added export here
             throw new Error("ChromaDB collection is not initialized.");
         }
         try {
-            const queryEmbedding = await this.embeddingGenerator.generate(queryText);
+            // const queryEmbedding = await this.embeddingGenerator.generate(queryText); // Old
+            const embeddingResponse = await generateEmbeddings({
+                provider: 'gemini', // Defaulting to gemini for RAG query embeddings
+                text: queryText,
+            });
+            if (!embeddingResponse || !embeddingResponse.embeddings || embeddingResponse.embeddings.length === 0 || !embeddingResponse.embeddings[0].embedding) {
+                console.error(`Failed to generate query embedding for text: "${queryText}" with provider 'gemini'.`);
+                throw new Error('Failed to generate query embedding.');
+            }
+            const queryEmbedding = embeddingResponse.embeddings[0].embedding;
             const results = await this.chromaCollection.query({
                 queryEmbeddings: [queryEmbedding],
                 nResults: n_results,

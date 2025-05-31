@@ -1,23 +1,26 @@
 import { Request, Response } from 'express';
 import { initializedRagService } from '../services/ragService';
 import { config } from '../config';
-// We need a generic way to make LLM calls.
-// Let's assume a new service or direct fetch for now, as existing ones are pure proxies.
-// For this example, we'll simulate the fetch call. `node-fetch` would be typical.
-// import fetch from 'node-fetch'; // Example: if node-fetch is available
+import { generateText } from '../services/llmWrapper'; // Import generateText
 
 export const handleRagQuery = async (req: Request, res: Response) => {
     try {
-        const { query, llm_model, n_results, stream } = req.body;
+        const { query, provider: requestProvider, n_results, stream } = req.body;
 
         if (!query || typeof query !== 'string' || query.trim() === '') {
             return res.status(400).json({ error: "Bad Request: query is required and must be a non-empty string." });
         }
 
+        const provider = requestProvider || 'gemini'; // Default to 'gemini'
+
+        if (provider !== 'openai' && provider !== 'gemini') {
+            return res.status(400).json({ error: "Bad Request: provider must be 'openai' or 'gemini'." });
+        }
+
         const numberOfResults = typeof n_results === 'number' && n_results > 0 ? n_results : 3;
-        // Default to OpenAI model if not specified, or use a configured default RAG LLM model
-        const modelToUse = llm_model || 'gpt-3.5-turbo'; // Make this configurable
         const shouldStream = stream === true;
+        // modelToUse will be determined by the llmWrapper based on the provider
+        const modelToUse = provider === 'gemini' ? 'gemini-pro' : 'gpt-3.5-turbo'; // Placeholder
 
         const ragService = await initializedRagService;
         const chunks = await ragService.queryChunks(query, numberOfResults);
@@ -66,131 +69,66 @@ export const handleRagQuery = async (req: Request, res: Response) => {
         // Placeholder for actual LLM API call
         // This section needs a proper HTTP client like node-fetch or axios
         // And needs to handle actual streaming from the LLM provider
-        
-        // Determine provider based on model (simplified)
-        let targetUrl: string;
-        let apiKey: string;
+        // The logic for targetUrl, apiKey, and specific payload adaptation
+        // will be handled by the llmWrapper in a future step.
+        // For now, we acknowledge the provider and simulate a response.
 
-        if (modelToUse.startsWith('gpt-')) { // OpenAI
-            targetUrl = `${config.openaiBaseUrl}/chat/completions`;
-            apiKey = config.openaiApiKey;
-        } else if (modelToUse.startsWith('gemini-')) { // Gemini
-            // Gemini API structure is different, e.g. /v1beta/models/gemini-pro:generateContent
-            // This simplification won't directly work for Gemini without adapting the payload and endpoint.
-            // For now, this example focuses on OpenAI-like API structure.
-            // A more robust solution would involve an LLM service layer.
-            targetUrl = `${config.geminiBaseUrl}/models/${modelToUse}:streamGenerateContent`; // Or non-streaming endpoint
-             if(shouldStream){
-                targetUrl = `${config.geminiBaseUrl}/models/${modelToUse}:streamGenerateContent`;
-            } else {
-                targetUrl = `${config.geminiBaseUrl}/models/${modelToUse}:generateContent`;
-            }
-            apiKey = config.geminiApiKey;
-            // Gemini payload is different, need to adapt `llmPayload`
-            // e.g. { "contents": [{ "parts": [{ "text": augmentedPrompt }] }] }
-            // This highlights the need for an abstraction layer.
-             return res.status(501).json({ error: "Gemini model integration is not fully implemented in this RAG query path yet." });
-        } else {
-            return res.status(400).json({ error: `Unsupported LLM model: ${modelToUse}. Currently supports 'gpt-' prefixed models.` });
-        }
+        console.log(`INFO: Selected provider: ${provider}. Model to use (placeholder): ${modelToUse}`);
+        // The llmPayload is for OpenAI like structure, llmWrapper will adapt it based on provider.
+        // console.log(`INFO: Selected provider: ${provider}. Model to use (placeholder): ${modelToUse}`);
 
-        if (!apiKey) {
-            return res.status(500).json({ error: `API key for ${modelToUse} is not configured.` });
-        }
+        // The system prompt is now part of the augmentedPrompt logic.
+        // llmWrapper expects a simple query string. We pass the augmented prompt.
 
         try {
-            // const response = await fetch(targetUrl, { // Using 'fetch' as if it's available
-            //     method: 'POST',
-            //     headers: {
-            //         'Content-Type': 'application/json',
-            //         'Authorization': `Bearer ${apiKey}`,
-            //     },
-            //     body: JSON.stringify(llmPayload),
-            // });
-
-            // if (!response.ok) {
-            //     const errorBody = await response.text();
-            //     console.error(`LLM API error: ${response.status} ${response.statusText}`, errorBody);
-            //     return res.status(response.status).json({ error: "LLM API request failed.", details: errorBody });
-            // }
-
-            // if (shouldStream && response.body) {
-            //     res.setHeader('Content-Type', 'text/event-stream');
-            //     res.setHeader('Cache-Control', 'no-cache');
-            //     res.setHeader('Connection', 'keep-alive');
-            //     response.body.pipe(res); // Pipe the stream
-            // } else {
-            //     const data = await response.json();
-            //     res.status(200).json(data);
-            // }
-            
-            // SIMULATED RESPONSE DUE TO LACK OF HTTP CLIENT TOOL
-            console.warn("LLM call is simulated. No actual HTTP request was made.");
             if (shouldStream) {
-                res.setHeader('Content-Type', 'text/event-stream');
-                res.setHeader('Cache-Control', 'no-cache');
-                res.setHeader('Connection', 'keep-alive');
-
-                let timeoutId: NodeJS.Timeout | null = null;
-
-                const sendEvent = (data: any) => {
-                    if (!res.writableEnded) { // Check if the stream is still writable
-                        res.write(`data: ${JSON.stringify(data)}\n\n`);
-                    }
-                };
-
-                sendEvent({ "choices": [{ "delta": { "content": `Simulated stream response for query: ${query} with context.` } }] });
-
-                timeoutId = setTimeout(() => {
-                    sendEvent({ "choices": [{ "delta": { "content": ` More simulated content.` } }] });
-                    sendEvent("[DONE]");
-                    if (!res.writableEnded) {
-                        res.end();
-                    }
-                }, 500);
-
-                req.on('close', () => {
-                    console.log("Request closed by client, clearing simulation timeout.");
-                    if (timeoutId) {
-                        clearTimeout(timeoutId);
-                    }
-                    // Ensure res.end() is called if not already, to clean up resources
-                    if (!res.writableEnded) {
-                        res.end();
-                    }
+                // TODO: Implement streaming response handling with llmWrapper
+                // For now, llmWrapper.generateText might not fully support streaming to res object.
+                // This would require generateText to accept a stream handler or return a stream.
+                // For this refactoring, we will return a 501 Not Implemented for streaming requests.
+                console.warn(`Streaming for provider ${provider} is not fully implemented yet through llmWrapper.`);
+                return res.status(501).json({ error: "Streaming not implemented for this provider via RAG query." });
+            } else {
+                // Make the call to the LLM via the llmWrapper
+                const llmResponse = await generateText({
+                    provider: provider as 'openai' | 'gemini', // Cast provider to the expected type
+                    query: augmentedPrompt, // Pass the full augmented prompt
+                    // stream: false, // Explicitly false, though shouldStream is already false here
+                    // model can be omitted to use llmWrapper's default for the provider
                 });
 
-            } else {
+                // Send the response from the llmWrapper back to the client
+                // The llmResponse structure is { text: string, provider_model?: string, finish_reason?: string }
+                // We might want to wrap this in a structure similar to what was simulated before for consistency,
+                // or define a new response structure for RAG queries.
+                // For now, let's adapt it slightly to resemble the previous non-streaming structure.
                 res.status(200).json({
-                    id: "sim_chatcmpl-xxxxxxxx",
-                    object: "chat.completion",
+                    id: `rag_cmpl-${provider}-${Date.now()}`, // Generate a simple ID
+                    object: "text_completion", // Or a more RAG-specific object type
                     created: Math.floor(Date.now() / 1000),
-                    model: modelToUse,
+                    provider: provider,
+                    model: llmResponse.provider_model || modelToUse, // Use model from llmResponse or fallback
                     choices: [{
                         index: 0,
                         message: {
                             role: "assistant",
-                            content: `Simulated response for query: ${query} with context. Model: ${modelToUse}. Prompt: ${augmentedPrompt}`,
+                            content: llmResponse.text,
                         },
-                        finish_reason: "stop",
+                        finish_reason: llmResponse.finish_reason || "stop", // Fallback if not provided
                     }],
-                    usage: {
-                        prompt_tokens: 0, // Simulated
-                        completion_tokens: 0, // Simulated
-                        total_tokens: 0, // Simulated
-                    }
+                    // Usage data is not currently part of llmWrapper's TextGenerationResponse.
+                    // usage: { ... }
                 });
             }
-
-        } catch (fetchError: any) {
-            console.error("Error making LLM API call:", fetchError);
+        } catch (llmError: any) {
+            console.error(`Error calling llmWrapper for provider ${provider}:`, llmError);
             if (!res.headersSent) {
-                 return res.status(500).json({ error: "Failed to communicate with LLM provider.", details: fetchError.message });
+                 return res.status(500).json({ error: `Failed to get response from LLM provider ${provider}.`, details: llmError.message });
             }
         }
 
     } catch (error: any) {
-        console.error(`Error in handleRagQuery for query "${req.body.query}":`, error);
+        console.error(`Error in handleRagQuery for query "${req.body.query}" with provider "${req.body.provider || 'default'}":`, error);
         if (!res.headersSent) {
             if (error.message && error.message.includes("ChromaDB collection is not initialized")) {
                 return res.status(503).json({ error: "Service Unavailable: RAG service is not ready." });

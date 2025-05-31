@@ -68,4 +68,39 @@ const fetchOpenaiResponse = async (
 	}
 };
 
-export { fetchOpenaiResponse };
+const getOpenaiEmbedding = async (text: string, model: string = 'text-embedding-ada-002'): Promise<number[]> => {
+	if (!config.openaiApiKey) {
+		throw new Error('OpenAI API key is not configured.');
+	}
+
+	const url = `${OPENAI_API_BASE_URL}/embeddings`;
+	const payload = {
+		input: text,
+		model: model,
+	};
+
+	const response = await fetch(url, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'Authorization': `Bearer ${config.openaiApiKey}`,
+		},
+		body: JSON.stringify(payload),
+	});
+
+	if (!response.ok) {
+		const errorBody = await response.text();
+		console.error(`OpenAI API error (Embeddings): ${response.status} ${response.statusText}`, errorBody);
+		throw new Error(`OpenAI API request failed (Embeddings): ${response.status} ${errorBody}`);
+	}
+
+	const data = await response.json();
+	if (data.data && data.data.length > 0 && data.data[0].embedding) {
+		return data.data[0].embedding;
+	} else {
+		console.error("Unexpected OpenAI embedding response structure:", data);
+		throw new Error("Failed to extract embedding from OpenAI response or response format unexpected.");
+	}
+};
+
+export { fetchOpenaiResponse, getOpenaiEmbedding };
