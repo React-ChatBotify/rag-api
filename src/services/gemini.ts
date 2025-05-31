@@ -1,35 +1,53 @@
 import { config } from '../config';
+import {
+	GeminiChatPayload, // Though not directly used as a single payload object for functions after refactor
+	GeminiChatCompletionResponse,
+	GeminiStreamChunk,
+	GeminiBatchEmbeddingsRequest,
+	GeminiBatchEmbeddingsResponse,
+	GeminiContent,
+	GeminiChatModel, // For typing model identifiers
+	GeminiEmbeddingModel
+} from '../types';
 
 const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+
+// Helper to ensure model name is correctly prefixed
+const ensureModelPrefixed = (modelId: string): string => {
+	if (!modelId.startsWith('models/')) {
+		return `models/${modelId}`;
+	}
+	return modelId;
+};
 
 /**
  * Sends a streaming chat completion request to the Gemini API via raw fetch
  * and processes the Server-Sent Events (SSE) stream manually.
  *
- * @param payload request payload containing the `model` name and `contents`.
- * @param onChunk callback function called for each raw SSE data chunk received from Gemini.
+ * @param modelId The model identifier (e.g., 'gemini-pro').
+ * @param contents The content parts for the chat.
+ * @param onChunk callback function called for each parsed SSE data chunk received from Gemini.
  *
  * @throws throw an error if the Gemini API response is not successful or if the response stream is missing.
  */
 const streamGemini = async (
-	payload: { model: string; contents: any[] },
-	onChunk: (line: string) => void
+	modelId: GeminiChatModel | string,
+	contents: GeminiContent[],
+	onChunk: (chunk: GeminiStreamChunk) => void
 ): Promise<void> => {
-	const { model, contents } = payload;
-
 	if (!config.geminiApiKey) {
 		throw new Error('Gemini API key is not configured.');
 	}
 
-	console.log("CHECKPOINT 1");
-	console.log({ contents });
-
+	const fullModelName = ensureModelPrefixed(modelId);
 	const url =
-		`${GEMINI_API_BASE_URL}/models/${encodeURIComponent(model)}:streamGenerateContent` +
+		`${GEMINI_API_BASE_URL}/${encodeURIComponent(fullModelName)}:streamGenerateContent` +
 		`?alt=sse&key=${config.geminiApiKey}`;
 
+	const bodyPayload: { contents: GeminiContent[] } = { contents };
+
 	const response = await fetch(url, {
-		body: JSON.stringify({ contents }),
+		body: JSON.stringify(bodyPayload),
 		headers: {
 			'Content-Type': 'application/json',
 		},
@@ -51,12 +69,19 @@ const streamGemini = async (
 
 		buffer += decoder.decode(value, { stream: true });
 		const lines = buffer.split('\n');
-		buffer = lines.pop()!;
+		buffer = lines.pop()!; // Keep the last partial line in buffer
 
 		for (const line of lines) {
 			const trimmedLine = line.trim();
 			if (trimmedLine.startsWith('data: ')) {
-				onChunk(trimmedLine);
+				const jsonData = trimmedLine.substring('data: '.length);
+				try {
+					const chunk = JSON.parse(jsonData) as GeminiStreamChunk;
+					onChunk(chunk);
+				} catch (error) {
+					console.error('Failed to parse Gemini stream chunk:', error, jsonData);
+					// Decide on error handling: re-throw, or pass error to onChunk, or ignore.
+				}
 			}
 		}
 	}
@@ -65,22 +90,29 @@ const streamGemini = async (
 /**
  * Sends a batch chat completion request to the Gemini API.
  *
- * @param payload request payload containing the `model` and `contents`.
+ * @param modelId The model identifier (e.g., 'gemini-pro').
+ * @param contents The content parts for the chat.
  *
  * @throws throw an error if the Gemini API response is not successful.
  */
-const batchGemini = async (payload: { model: string; contents: any[] }): Promise<any> => {
-	const { contents } = payload;
-
+const batchGemini = async (
+	modelId: GeminiChatModel | string,
+	contents: GeminiContent[]
+): Promise<GeminiChatCompletionResponse> => {
 	if (!config.geminiApiKey) {
 		throw new Error('Gemini API key is not configured.');
 	}
 
-	const url = `${GEMINI_API_BASE_URL}/models/${encodeURIComponent(config.geminiChatModel)}:generateContent?key=${config.geminiApiKey}`;
-	console.log(url);
+	// Use the provided modelId, not config.geminiChatModel directly, for flexibility
+	const fullModelName = ensureModelPrefixed(modelId || config.geminiChatModel);
+	const url =
+		`${GEMINI_API_BASE_URL}/${encodeURIComponent(fullModelName)}:generateContent` +
+		`?key=${config.geminiApiKey}`;
+
+	const bodyPayload: { contents: GeminiContent[] } = { contents };
 
 	const response = await fetch(url, {
-		body: JSON.stringify({ contents }),
+		body: JSON.stringify(bodyPayload),
 		headers: {
 			'Content-Type': 'application/json',
 		},
@@ -92,60 +124,32 @@ const batchGemini = async (payload: { model: string; contents: any[] }): Promise
 		throw new Error(`Gemini API error ${response.status}: ${errorText}`);
 	}
 
-	return await response.json();
+	const jsonResponse = await response.json();
+	return jsonResponse as GeminiChatCompletionResponse;
 };
 
 // Renaming for export clarity to match llmWrapper's expectations
 const streamGenerateContent = streamGemini;
 const batchGenerateContent = batchGemini;
 
-/**
- * Generates embeddings for multiple pieces of text in a batch using the Gemini API.
- *
- * @param requests An array of requests, each specifying the model and content to embed.
- *                 Example: [{ model: "models/embedding-001", content: { parts: [{text: "hello"}] } }]
- * @returns An object containing the embeddings.
- */
-interface BatchEmbedContentsRequest {
-  requests: Array<{
-    model: string; // Full model name, e.g., "models/embedding-001"
-    content: {
-      parts: Array<{ text: string }>;
-      role?: string; // Optional: "USER" or "MODEL"
-    };
-  }>;
-}
-
-interface BatchEmbedContentsResponse {
-  embeddings: Array<{
-    model: string;
-    values: number[];
-  }>;
-}
-
-const batchEmbedContents = async (payload: BatchEmbedContentsRequest): Promise<BatchEmbedContentsResponse> => {
+const batchEmbedContents = async (payload: GeminiBatchEmbeddingsRequest): Promise<GeminiBatchEmbeddingsResponse> => {
     if (!config.geminiApiKey) {
         throw new Error('Gemini API key is not configured.');
     }
 
-    // The model is specified in each request object in the payload.
-    // The endpoint itself does not take a model name directly in the URL path for batch.
-    // However, the Gemini API documentation for batchEmbedContents shows POST /v1beta/models:batchEmbedContents
-    // This implies the model is part of the request body, not the URL.
-    // Let's use a generic model endpoint if the API expects it, or remove model from URL if not needed.
-    // For safety, assuming a generic model endpoint for batch operation as per typical REST patterns if model is not in URL
-    // Looking at Google AI JS SDK, it seems to be POST /v1beta/models:batchEmbedContents
-    // The individual requests in the payload then specify their respective models.
-    // The `payload.requests[0].model` would be like "models/embedding-001"
-    // So the base model in the URL is not required.
-    const url = `${GEMINI_API_BASE_URL}/models/${config.geminiEmbeddingModel}:batchEmbedContents?key=${config.geminiApiKey}`;
+    // Ensure the model in the URL is prefixed.
+    // config.geminiEmbeddingModel might be 'embedding-001' or 'models/embedding-001'
+    // The actual individual embedding requests in payload.requests should already have their model names prefixed.
+    const urlModelName = ensureModelPrefixed(config.geminiEmbeddingModel as string); // Cast needed if GeminiEmbeddingModel is a literal union
+
+    const url = `${GEMINI_API_BASE_URL}/${urlModelName}:batchEmbedContents?key=${config.geminiApiKey}`;
 
     const response = await fetch(url, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload), // Send the whole payload { requests: [...] }
+        body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -155,13 +159,9 @@ const batchEmbedContents = async (payload: BatchEmbedContentsRequest): Promise<B
     }
 
     const data = await response.json();
-    // Expected structure: { embeddings: [ { model: "models/embedding-001", values: [...] } ] }
-    if (data.embeddings && Array.isArray(data.embeddings)) {
-        return data;
-    } else {
-        console.error("Unexpected Gemini batch embedding response structure:", data);
-        throw new Error("Failed to extract embeddings from Gemini batch response or response format unexpected.");
-    }
+    // Validate data structure against GeminiBatchEmbeddingsResponse if necessary,
+    // for now, direct cast, assuming API conforms.
+    return data as GeminiBatchEmbeddingsResponse;
 };
 
 

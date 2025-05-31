@@ -1,14 +1,36 @@
 import { generateText, generateEmbeddings } from '../llmWrapper';
 import { fetchOpenaiResponse, getOpenaiEmbedding } from '../openai';
 import {
-    streamGenerateContent, // Assuming this is the actual name in gemini.ts for streaming
-    batchGenerateContent,  // Assuming this is the actual name in gemini.ts for non-streaming
-    embedContent,
+    streamGenerateContent,
+    batchGenerateContent,
     batchEmbedContents
 } from '../gemini';
 import { config } from '../../config';
+import {
+    OpenAIChatCompletionResponse,
+    GeminiChatCompletionResponse,
+    OpenAIEmbeddingsResponse,
+    GeminiBatchEmbeddingsResponse,
+    OpenAIChatCompletionChunk,
+    GeminiStreamChunk, // This is GeminiChatCompletionResponse
+    LLMChatResponse,
+    LLMEmbeddingsResponse,
+    LLMStreamChunk,
+    OpenAIEmbeddingsPayload,
+    GeminiBatchEmbeddingsRequest,
+    GeminiContent,
+    OpenAIChatMessage,
+    OpenAIEmbedding,
+    GeminiEmbedding,
+} from '../../types';
 
 // Mock underlying services
+const mockFetchOpenaiResponse = fetchOpenaiResponse as jest.Mock;
+const mockGetOpenaiEmbedding = getOpenaiEmbedding as jest.Mock;
+const mockStreamGenerateContent = streamGenerateContent as jest.Mock;
+const mockBatchGenerateContent = batchGenerateContent as jest.Mock;
+const mockBatchEmbedContents = batchEmbedContents as jest.Mock;
+
 jest.mock('../openai', () => ({
     fetchOpenaiResponse: jest.fn(),
     getOpenaiEmbedding: jest.fn(),
@@ -17,171 +39,218 @@ jest.mock('../openai', () => ({
 jest.mock('../gemini', () => ({
     streamGenerateContent: jest.fn(),
     batchGenerateContent: jest.fn(),
-    embedContent: jest.fn(),
     batchEmbedContents: jest.fn(),
 }));
 
-// Mock config if needed, e.g., for default models
 jest.mock('../../config', () => ({
     config: {
-        llm: {
-            openai: {
-                chatModels: ['gpt-3.5-turbo-test'],
-                embeddingModels: ['text-embedding-ada-002-test'],
-            },
-            gemini: {
-                textModels: ['gemini-pro-test'],
-                embeddingModels: ['embedding-001-test'],
-            },
-        },
-        // other necessary config values
+        openaiApiKey: 'test-openai-key',
+        geminiApiKey: 'test-gemini-key',
+        openAiChatModel: 'gpt-3.5-turbo-test',
+        openAiEmbeddingModel: 'text-embedding-ada-002-test',
+        geminiChatModel: 'gemini-pro-test',
+        geminiEmbeddingModel: 'embedding-001-test',
+        // other necessary config values like RAG_API_KEY etc.
+        ragApiKey: 'test-rag-api-key',
     },
 }));
 
 describe('LLM Wrapper Service', () => {
     const mockQuery = "Test query";
-    const mockText = "Test text for embedding";
+    const mockTexts = ["Test text 1 for embedding", "Test text 2 for embedding"];
 
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
     describe('generateText', () => {
-        it('should call fetchOpenaiResponse for openai provider (non-streaming)', async () => {
-            const mockOpenaiApiResponse = {
-                choices: [{ message: { content: "OpenAI response" }, finish_reason: "stop" }],
-                model: "gpt-3.5-turbo-test-response",
+        // Non-Streaming Tests
+        it('should call fetchOpenaiResponse for openai provider (non-streaming) and return correct structure', async () => {
+            const mockApiResponse: OpenAIChatCompletionResponse = {
+                id: 'chatcmpl-mockId',
+                object: 'chat.completion',
+                created: Date.now(),
+                model: config.openAiChatModel,
+                choices: [{ index: 0, message: { role: 'assistant', content: "OpenAI response" }, finish_reason: 'stop' }],
+                usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 }
             };
-            (fetchOpenaiResponse as jest.Mock).mockResolvedValue(mockOpenaiApiResponse);
+            mockFetchOpenaiResponse.mockResolvedValue(mockApiResponse);
 
-            const result = await generateText({ provider: 'openai', query: mockQuery });
+            const result = await generateText({ provider: 'openai', query: mockQuery }) as LLMChatResponse;
 
-            expect(fetchOpenaiResponse).toHaveBeenCalledWith({
-                model: config.llm.openai.chatModels[0],
-                messages: [{ role: 'user', content: mockQuery }],
-                stream: undefined, // stream is undefined, not false, if not passed
+            expect(mockFetchOpenaiResponse).toHaveBeenCalledWith({
+                model: config.openAiChatModel,
+                messages: [{ role: 'user', content: mockQuery } as OpenAIChatMessage],
+                stream: false,
             });
-            expect(result.text).toBe("OpenAI response");
-            expect(result.provider_model).toBe("gpt-3.5-turbo-test-response");
-            expect(result.finish_reason).toBe("stop");
+            expect(result.provider).toBe('openai');
+            expect(result).toEqual(expect.objectContaining(mockApiResponse));
         });
 
-        it('should call batchGenerateContent for gemini provider (non-streaming)', async () => {
-            const mockGeminiApiResponse = {
-                responses: [{ candidates: [{ content: { parts: [{ text: "Gemini response" }] }, finishReason: "STOP" }] }],
-            };
-            (batchGenerateContent as jest.Mock).mockResolvedValue(mockGeminiApiResponse);
-
-            const result = await generateText({ provider: 'gemini', query: mockQuery });
-
-            expect(batchGenerateContent).toHaveBeenCalledWith({
-                requests: [{
-                    model: `models/${config.llm.gemini.textModels[0]}`,
-                    contents: [{ parts: [{ text: mockQuery }] }],
+        it('should call batchGenerateContent for gemini provider (non-streaming) and return correct structure', async () => {
+            const mockApiResponse: GeminiChatCompletionResponse = {
+                candidates: [{
+                    content: { role: 'model', parts: [{ text: "Gemini response" }] },
+                    finishReason: 'STOP',
+                    index: 0,
+                    safetyRatings: [],
                 }],
-            });
-            expect(result.text).toBe("Gemini response");
-            expect(result.provider_model).toBe(config.llm.gemini.textModels[0]);
-            expect(result.finish_reason).toBe("STOP");
-        });
-
-        // TODO: Add tests for streaming case if llmWrapper.generateText is updated to fully support it.
-        // For now, llmWrapper's stream handling is basic and might rely on underlying services or need more work.
-        // Example for Gemini stream (conceptual):
-        it('should call streamGenerateContent for gemini provider (streaming)', async () => {
-            // This test assumes streamGenerateContent is adapted or llmWrapper handles its response for TextGenerationResponse
-            const mockGeminiStreamResponse = {
-                // Simplified: assume it resolves to a structure that can be formed into TextGenerationResponse
-                // Actual stream handling would be more complex to test here.
-                // For example, if it returns an aggregated text:
-                candidates: [{ content: { parts: [{ text: "Gemini streamed response" }] } }]
+                promptFeedback: { safetyRatings: [] }
             };
-            (streamGenerateContent as jest.Mock).mockResolvedValue(mockGeminiStreamResponse);
+            mockBatchGenerateContent.mockResolvedValue(mockApiResponse);
 
-            const result = await generateText({ provider: 'gemini', query: mockQuery, stream: true });
+            const result = await generateText({ provider: 'gemini', query: mockQuery }) as LLMChatResponse;
+            const expectedContents: GeminiContent[] = [{ role: 'user', parts: [{ text: mockQuery }] }];
 
-            expect(streamGenerateContent).toHaveBeenCalledWith({
-                model: `models/${config.llm.gemini.textModels[0]}`,
-                contents: [{ parts: [{ text: mockQuery }] }],
-            });
-            expect(result.text).toBe("Gemini streamed response"); // Adjust if actual stream aggregation differs
+
+            expect(mockBatchGenerateContent).toHaveBeenCalledWith(
+                config.geminiChatModel,
+                expectedContents
+            );
+            expect(result.provider).toBe('gemini');
+            expect(result).toEqual(expect.objectContaining(mockApiResponse));
         });
 
+        // Streaming Tests
+        it('should call fetchOpenaiResponse and trigger onChunk for openai provider (streaming)', async () => {
+            const mockOnChunk = jest.fn();
+            const mockChunk: OpenAIChatCompletionChunk = {
+                id: 'chunk-id', object: 'chat.completion.chunk', created: Date.now(), model: config.openAiChatModel,
+                choices: [{ index: 0, delta: { content: "Hello" }, finish_reason: null }]
+            };
+
+            mockFetchOpenaiResponse.mockImplementation(async (payload, onChunkCallback) => {
+                if (payload.stream && onChunkCallback) {
+                    onChunkCallback(mockChunk);
+                }
+                return Promise.resolve(); // Stream function returns void
+            });
+
+            const result = await generateText({ provider: 'openai', query: mockQuery, stream: true, onChunk: mockOnChunk });
+
+            expect(mockFetchOpenaiResponse).toHaveBeenCalledWith(
+                expect.objectContaining({ stream: true, messages: [{role: 'user', content: mockQuery}] }),
+                expect.any(Function)
+            );
+            expect(mockOnChunk).toHaveBeenCalledWith({ ...mockChunk, provider: 'openai' });
+            expect(result).toBeUndefined();
+        });
+
+        it('should call streamGenerateContent and trigger onChunk for gemini provider (streaming)', async () => {
+            const mockOnChunk = jest.fn();
+            // GeminiStreamChunk is GeminiChatCompletionResponse
+            const mockChunk: GeminiStreamChunk = {
+                candidates: [{
+                    content: { role: 'model', parts: [{ text: "Hello" }] },
+                    index: 0
+                }]
+            };
+
+            mockStreamGenerateContent.mockImplementation(async (modelId, contents, onChunkCallback) => {
+                if (onChunkCallback) {
+                    onChunkCallback(mockChunk);
+                }
+                return Promise.resolve();
+            });
+            const expectedContents: GeminiContent[] = [{ role: 'user', parts: [{ text: mockQuery }] }];
+
+            const result = await generateText({ provider: 'gemini', query: mockQuery, stream: true, onChunk: mockOnChunk });
+
+            expect(mockStreamGenerateContent).toHaveBeenCalledWith(
+                config.geminiChatModel,
+                expectedContents,
+                expect.any(Function)
+            );
+            expect(mockOnChunk).toHaveBeenCalledWith({ ...mockChunk, provider: 'gemini' });
+            expect(result).toBeUndefined();
+        });
+
+        // Error Handling Tests
+        it('should throw error if query is missing for generateText', async () => {
+            await expect(generateText({ provider: 'openai', query: '' }))
+                .rejects.toThrow('Query is required for text generation.');
+        });
 
         it('should throw error for unsupported provider in generateText', async () => {
             await expect(generateText({ provider: 'unsupported' as any, query: mockQuery }))
                 .rejects.toThrow('Unsupported provider: unsupported');
         });
 
-        it('should throw error if query is missing for generateText', async () => {
-            await expect(generateText({ provider: 'openai' }))
-                .rejects.toThrow('Query is required for text generation.');
+        it('should throw error if stream is true but onChunk is missing', async () => {
+            await expect(generateText({ provider: 'openai', query: mockQuery, stream: true }))
+                .rejects.toThrow('onChunk callback is required for streaming responses.');
         });
     });
 
     describe('generateEmbeddings', () => {
-        it('should call getOpenaiEmbedding for openai provider', async () => {
-            const mockEmbeddingVector = [0.1, 0.2, 0.3];
-            (getOpenaiEmbedding as jest.Mock).mockResolvedValue(mockEmbeddingVector);
-
-            const result = await generateEmbeddings({ provider: 'openai', text: mockText });
-
-            expect(getOpenaiEmbedding).toHaveBeenCalledWith(mockText, config.llm.openai.embeddingModels[0]);
-            expect(result.embeddings.length).toBe(1);
-            expect(result.embeddings[0].embedding).toEqual(mockEmbeddingVector);
-            expect(result.provider_model).toBe(config.llm.openai.embeddingModels[0]);
-        });
-
-        it('should call batchEmbedContents for gemini provider (using texts array)', async () => {
-            const mockTexts = ["text1", "text2"];
-            const mockGeminiBatchResponse = {
-                embeddings: [
-                    { model: "models/embedding-001-test", values: [0.1, 0.1] },
-                    { model: "models/embedding-001-test", values: [0.2, 0.2] },
-                ]
+        it('should call getOpenaiEmbedding for openai provider and return correct structure', async () => {
+            const mockApiResponse: OpenAIEmbeddingsResponse = {
+                object: 'list', data: [{ object: 'embedding', embedding: [0.1, 0.2], index: 0 } as OpenAIEmbedding],
+                model: config.openAiEmbeddingModel, usage: { prompt_tokens: 2, total_tokens: 2 }
             };
-            (batchEmbedContents as jest.Mock).mockResolvedValue(mockGeminiBatchResponse);
+            mockGetOpenaiEmbedding.mockResolvedValue(mockApiResponse);
+            const expectedPayload: OpenAIEmbeddingsPayload = { input: mockTexts, model: config.openAiEmbeddingModel };
 
-            const result = await generateEmbeddings({ provider: 'gemini', texts: mockTexts });
 
-            expect(batchEmbedContents).toHaveBeenCalledWith({
-                requests: mockTexts.map(t => ({
-                    model: `models/${config.llm.gemini.embeddingModels[0]}`,
-                    content: { parts: [{ text: t }] },
-                })),
-            });
-            expect(result.embeddings.length).toBe(2);
-            expect(result.embeddings[0].embedding).toEqual([0.1, 0.1]);
-            expect(result.embeddings[1].embedding).toEqual([0.2, 0.2]);
-            expect(result.provider_model).toBe(config.llm.gemini.embeddingModels[0]);
+            const result = await generateEmbeddings({ provider: 'openai', texts: mockTexts }) as LLMEmbeddingsResponse;
+
+            expect(mockGetOpenaiEmbedding).toHaveBeenCalledWith(expectedPayload);
+            expect(result.provider).toBe('openai');
+            expect(result).toEqual(expect.objectContaining(mockApiResponse));
         });
 
-        it('should call batchEmbedContents for gemini provider (using single text)', async () => {
-            const mockGeminiBatchResponse = {
-                embeddings: [ { model: "models/embedding-001-test", values: [0.1, 0.1] } ]
+        it('should call batchEmbedContents for gemini provider and return correct structure', async () => {
+            const mockApiResponse: GeminiBatchEmbeddingsResponse = {
+                embeddings: [{ model: `models/${config.geminiEmbeddingModel}`, values: [0.3, 0.4] } as GeminiEmbedding]
             };
-            (batchEmbedContents as jest.Mock).mockResolvedValue(mockGeminiBatchResponse);
+            mockBatchEmbedContents.mockResolvedValue(mockApiResponse);
 
-            const result = await generateEmbeddings({ provider: 'gemini', text: mockText });
-            expect(batchEmbedContents).toHaveBeenCalledWith({
-                requests: [{
-                    model: `models/${config.llm.gemini.embeddingModels[0]}`,
-                    content: { parts: [{ text: mockText }] },
-                }],
-            });
-            expect(result.embeddings.length).toBe(1);
-            expect(result.embeddings[0].embedding).toEqual([0.1, 0.1]);
+            const prefixedModelId = `models/${config.geminiEmbeddingModel}`;
+            const expectedPayload: GeminiBatchEmbeddingsRequest = {
+                requests: mockTexts.map(text => ({
+                    model: prefixedModelId,
+                    content: { parts: [{ text }] }
+                }))
+            };
+
+            const result = await generateEmbeddings({ provider: 'gemini', texts: mockTexts }) as LLMEmbeddingsResponse;
+
+            expect(mockBatchEmbedContents).toHaveBeenCalledWith(expectedPayload);
+            expect(result.provider).toBe('gemini');
+            expect(result).toEqual(expect.objectContaining(mockApiResponse));
         });
 
+        it('should use provided model for OpenAI embeddings', async () => {
+            const customModel = 'text-embedding-3-large-test';
+            mockGetOpenaiEmbedding.mockResolvedValue({} as OpenAIEmbeddingsResponse); // Response content doesn't matter for this check
+            await generateEmbeddings({ provider: 'openai', texts: mockTexts, model: customModel });
+            expect(mockGetOpenaiEmbedding).toHaveBeenCalledWith(
+                expect.objectContaining({ model: customModel })
+            );
+        });
+
+        it('should use provided model for Gemini embeddings and prefix it correctly', async () => {
+            const customModel = 'embedding-custom-test';
+            mockBatchEmbedContents.mockResolvedValue({} as GeminiBatchEmbeddingsResponse);
+            await generateEmbeddings({ provider: 'gemini', texts: mockTexts, model: customModel });
+            expect(mockBatchEmbedContents).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    requests: expect.arrayContaining([
+                        expect.objectContaining({ model: `models/${customModel}` })
+                    ])
+                })
+            );
+        });
+
+
+        it('should throw error if texts are missing for generateEmbeddings', async () => {
+            await expect(generateEmbeddings({ provider: 'openai', texts: [] }))
+                .rejects.toThrow('Texts are required for generating embeddings.');
+        });
 
         it('should throw error for unsupported provider in generateEmbeddings', async () => {
-            await expect(generateEmbeddings({ provider: 'unsupported' as any, text: mockText }))
+            await expect(generateEmbeddings({ provider: 'unsupported' as any, texts: mockTexts }))
                 .rejects.toThrow('Unsupported provider for embeddings: unsupported');
-        });
-
-        it('should throw error if text or texts are missing for generateEmbeddings', async () => {
-            await expect(generateEmbeddings({ provider: 'openai' }))
-                .rejects.toThrow('Text or texts are required for generating embeddings.');
         });
     });
 });

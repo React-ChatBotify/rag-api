@@ -1,11 +1,20 @@
 import { Request, Response } from 'express';
 import { initializedRagService } from '../services/ragService';
-import { config } from '../config';
-import { generateText } from '../services/llmWrapper'; // Import generateText
+import { config } from '../config'; // Used for potential fallback model names if not sending through llmWrapper
+import { generateText } from '../services/llmWrapper';
+import {
+    LLMChatResponse,
+    LLMStreamChunk,
+    // Specific types below usually not needed due to discriminated unions, but can be for clarity
+    // OpenAIChatCompletionResponse,
+    // GeminiChatCompletionResponse,
+    // OpenAIChatCompletionChunk,
+    // GeminiStreamChunk,
+} from '../types';
 
 export const handleRagQuery = async (req: Request, res: Response) => {
     try {
-        const { query, provider: requestProvider, n_results, stream, rag_type: raw_rag_type } = req.body;
+        const { query, provider: requestProvider, model, n_results, stream, rag_type: raw_rag_type } = req.body;
 
         if (!query || typeof query !== 'string' || query.trim() === '') {
             return res.status(400).json({ error: "Bad Request: query is required and must be a non-empty string." });
@@ -28,8 +37,8 @@ export const handleRagQuery = async (req: Request, res: Response) => {
 
         const numberOfResults = typeof n_results === 'number' && n_results > 0 ? n_results : 3;
         const shouldStream = stream === true;
-        // modelToUse will be determined by the llmWrapper based on the provider
-        const modelToUse = provider === 'gemini' ? 'gemini-2.0-flash-lite' : 'gpt-4.1-nano'; // Placeholder
+        // Model selection is now primarily handled by llmWrapper,
+        // but we can pass `model` from request body if provided.
 
         const ragService = await initializedRagService;
         const chunks = await ragService.queryChunks(query, numberOfResults);
@@ -74,79 +83,59 @@ export const handleRagQuery = async (req: Request, res: Response) => {
                 augmentedPrompt = `User Query: ${query}\n\n${contextDescription}:\n---\n${context}\n---\nBased on the relevant information above, answer the user query.`;
             }
         }
+        // System prompt is implicitly part of augmentedPrompt for OpenAI if needed,
+        // or handled by Gemini's content structure.
+        // For llmWrapper, we just pass the main user query (which is augmented).
 
-        const llmPayload = {
-            model: modelToUse,
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: augmentedPrompt }
-            ],
-            stream: shouldStream,
-        };
-
-        // Placeholder for actual LLM API call
-        // This section needs a proper HTTP client like node-fetch or axios
-        // And needs to handle actual streaming from the LLM provider
-        // The logic for targetUrl, apiKey, and specific payload adaptation
-        // will be handled by the llmWrapper in a future step.
-        // For now, we acknowledge the provider and simulate a response.
-
-        console.log(`INFO: Selected provider: ${provider}. Model to use (placeholder): ${modelToUse}`);
-        // The llmPayload is for OpenAI like structure, llmWrapper will adapt it based on provider.
-        // console.log(`INFO: Selected provider: ${provider}. Model to use (placeholder): ${modelToUse}`);
-
-        // The system prompt is now part of the augmentedPrompt logic.
-        // llmWrapper expects a simple query string. We pass the augmented prompt.
+        console.log(`INFO: Selected provider: ${provider}. RAG Type: ${rag_type}. Streaming: ${shouldStream}. Model: ${model || 'default'}`);
 
         try {
             if (shouldStream) {
-                // TODO: Implement streaming response handling with llmWrapper
-                // For now, llmWrapper.generateText might not fully support streaming to res object.
-                // This would require generateText to accept a stream handler or return a stream.
-                // For this refactoring, we will return a 501 Not Implemented for streaming requests.
-                console.warn(`Streaming for provider ${provider} is not fully implemented yet through llmWrapper.`);
-                return res.status(501).json({ error: "Streaming not implemented for this provider via RAG query." });
-            } else {
-                // Make the call to the LLM via the llmWrapper
-                const llmResponse = await generateText({
-                    provider: provider as 'openai' | 'gemini', // Cast provider to the expected type
-                    query: augmentedPrompt, // Pass the full augmented prompt
-                    // stream: false, // Explicitly false, though shouldStream is already false here
-                    // model can be omitted to use llmWrapper's default for the provider
-                });
+                res.setHeader('Content-Type', 'text/event-stream');
+                res.setHeader('Cache-Control', 'no-cache');
+                res.setHeader('Connection', 'keep-alive');
+                res.flushHeaders(); // Send headers immediately
 
-                // Send the response from the llmWrapper back to the client
-                // The llmResponse structure is { text: string, provider_model?: string, finish_reason?: string }
-                // We might want to wrap this in a structure similar to what was simulated before for consistency,
-                // or define a new response structure for RAG queries.
-                // For now, let's adapt it slightly to resemble the previous non-streaming structure.
-                res.status(200).json({
-                    id: `rag_cmpl-${provider}-${Date.now()}`, // Generate a simple ID
-                    object: "text_completion", // Or a more RAG-specific object type
-                    created: Math.floor(Date.now() / 1000),
-                    provider: provider,
-                    model: llmResponse.provider_model || modelToUse, // Use model from llmResponse or fallback
-                    choices: [{
-                        index: 0,
-                        message: {
-                            role: "assistant",
-                            content: llmResponse.text,
-                        },
-                        finish_reason: llmResponse.finish_reason || "stop", // Fallback if not provided
-                    }],
-                    // Usage data is not currently part of llmWrapper's TextGenerationResponse.
-                    // usage: { ... }
+                await generateText({
+                    provider: provider as 'openai' | 'gemini',
+                    query: augmentedPrompt, // This now includes context and original query
+                    stream: true,
+                    model: model, // Pass model if provided in request
+                    onChunk: (chunk: LLMStreamChunk) => {
+                        // The chunk is already { ...ProviderChunk, provider }
+                        // Send it in SSE format
+                        res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+                    }
                 });
+                res.end(); // Close the connection once generateText promise resolves
+            } else {
+                const llmResponse = await generateText({
+                    provider: provider as 'openai' | 'gemini',
+                    query: augmentedPrompt,
+                    stream: false,
+                    model: model, // Pass model if provided in request
+                }) as LLMChatResponse; // Not void because stream is false
+
+                // The llmResponse is already a discriminated union with the provider field
+                // and the provider-specific response structure.
+                // As per instructions, send the provider-specific response.
+                res.status(200).json(llmResponse);
             }
         } catch (llmError: any) {
-            console.error(`Error calling llmWrapper for provider ${provider}:`, llmError);
+            console.error(`Error calling llmWrapper for provider ${provider} (model: ${model || 'default'}):`, llmError);
             if (!res.headersSent) {
-                 return res.status(500).json({ error: `Failed to get response from LLM provider ${provider}.`, details: llmError.message });
+                // If headers not sent, we can still send a normal JSON error response
+                return res.status(500).json({ error: `Failed to get response from LLM provider ${provider}.`, details: llmError.message });
+            } else if (!res.writableEnded) {
+                // If headers sent (streaming), try to write an error to the stream and end it.
+                res.write(`data: ${JSON.stringify({ error: "Stream error", details: llmError.message })}\n\n`);
+                res.end();
             }
         }
 
     } catch (error: any) {
-        console.error(`Error in handleRagQuery for query "${req.body.query}" with provider "${req.body.provider || 'default'}":`, error);
+        console.error(`Error in handleRagQuery for query "${req.body.query}" (model: ${req.body.model || 'default'}) with provider "${req.body.provider || 'default'}":`, error);
+        // Ensure not to set status or json if headers already sent (e.g. during streaming)
         if (!res.headersSent) {
             if (error.message && error.message.includes("ChromaDB collection is not initialized")) {
                 return res.status(503).json({ error: "Service Unavailable: RAG service is not ready." });
@@ -155,6 +144,10 @@ export const handleRagQuery = async (req: Request, res: Response) => {
                 return res.status(503).json({ error: "Service Unavailable: Embedding model not ready." });
             }
             return res.status(500).json({ error: "Internal Server Error", details: error.message });
+        } else if (!res.writableEnded){
+            // If streaming and an error occurs, and we haven't already ended the stream due to an LLM error.
+            console.error("Headers already sent, but stream not ended. Attempting to end stream gracefully after error.");
+            res.end();
         }
     }
 };

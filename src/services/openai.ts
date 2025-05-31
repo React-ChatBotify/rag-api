@@ -1,4 +1,11 @@
 import { config } from '../config';
+import {
+  OpenAIEmbeddingsPayload,
+  OpenAIEmbeddingsResponse,
+  OpenAIChatCompletionRequestPayload,
+  OpenAIChatCompletionResponse,
+  OpenAIChatCompletionChunk,
+} from '../types';
 
 const OPENAI_API_BASE_URL = 'https://api.openai.com/v1';
 
@@ -7,15 +14,15 @@ const OPENAI_API_BASE_URL = 'https://api.openai.com/v1';
  * and processes the Server-Sent Events (SSE) stream manually.
  *
  * @param payload request payload for OpenAI's chat completion endpoint (must include model, messages).
- * @param onChunk callback function called for each raw SSE data chunk received from OpenAI.
+ * @param onChunk callback function called for each parsed SSE data chunk received from OpenAI.
  *
  * @throws Will throw an error if the OpenAI API response is not successful or if the response stream is missing.
  */
 const fetchOpenaiResponse = async (
-	payload: Record<string, any>,
-	onChunk?: (line: string) => void,
+	payload: OpenAIChatCompletionRequestPayload,
+	onChunk?: (chunk: OpenAIChatCompletionChunk) => void,
 	organizationId?: string
-): Promise<void> => {
+): Promise<void | OpenAIChatCompletionResponse> => {
 	if (!config.openaiApiKey) {
 		throw new Error('OpenAI API key is not configured.');
 	}
@@ -56,28 +63,36 @@ const fetchOpenaiResponse = async (
 
 			for (const line of lines) {
 				const trimmed = line.trim();
-				if (trimmed.startsWith('data: ') && onChunk) {
-					onChunk(trimmed);
+				if (trimmed.startsWith('data: ')) {
+					const jsonData = trimmed.substring('data: '.length);
+					if (jsonData === '[DONE]') {
+						continue;
+					}
+					try {
+						const chunk = JSON.parse(jsonData) as OpenAIChatCompletionChunk;
+						if (onChunk) {
+							onChunk(chunk);
+						}
+					} catch (error) {
+						console.error('Failed to parse OpenAI stream chunk:', error, jsonData);
+						// Potentially re-throw or handle more gracefully
+					}
 				}
 			}
 		}
-		return;
+		return; // For stream, explicitly return void
 	} else {
 		const json = await response.json();
-		return json;
+		return json as OpenAIChatCompletionResponse;
 	}
 };
 
-const getOpenaiEmbedding = async (text: string, model: string = 'text-embedding-ada-002'): Promise<number[]> => {
+const getOpenaiEmbedding = async (payload: OpenAIEmbeddingsPayload): Promise<OpenAIEmbeddingsResponse> => {
 	if (!config.openaiApiKey) {
 		throw new Error('OpenAI API key is not configured.');
 	}
 
 	const url = `${OPENAI_API_BASE_URL}/embeddings`;
-	const payload = {
-		input: text,
-		model: model,
-	};
 
 	const response = await fetch(url, {
 		method: 'POST',
@@ -95,12 +110,9 @@ const getOpenaiEmbedding = async (text: string, model: string = 'text-embedding-
 	}
 
 	const data = await response.json();
-	if (data.data && data.data.length > 0 && data.data[0].embedding) {
-		return data.data[0].embedding;
-	} else {
-		console.error("Unexpected OpenAI embedding response structure:", data);
-		throw new Error("Failed to extract embedding from OpenAI response or response format unexpected.");
-	}
+	// It's good practice to validate the structure of 'data' against OpenAIEmbeddingsResponse
+	// For now, we'll cast, assuming the API conforms.
+	return data as OpenAIEmbeddingsResponse;
 };
 
 export { fetchOpenaiResponse, getOpenaiEmbedding };
