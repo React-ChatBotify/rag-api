@@ -21,6 +21,9 @@ const streamGemini = async (
 		throw new Error('Gemini API key is not configured.');
 	}
 
+	console.log("CHECKPOINT 1");
+	console.log({ contents });
+
 	const url =
 		`${GEMINI_API_BASE_URL}/models/${encodeURIComponent(model)}:streamGenerateContent` +
 		`?alt=sse&key=${config.geminiApiKey}`;
@@ -67,13 +70,14 @@ const streamGemini = async (
  * @throws throw an error if the Gemini API response is not successful.
  */
 const batchGemini = async (payload: { model: string; contents: any[] }): Promise<any> => {
-	const { model, contents } = payload;
+	const { contents } = payload;
 
 	if (!config.geminiApiKey) {
 		throw new Error('Gemini API key is not configured.');
 	}
 
-	const url = `${GEMINI_API_BASE_URL}/models/${encodeURIComponent(model)}:generateContent?key=${config.geminiApiKey}`;
+	const url = `${GEMINI_API_BASE_URL}/models/${encodeURIComponent(config.geminiChatModel)}:generateContent?key=${config.geminiApiKey}`;
+	console.log(url);
 
 	const response = await fetch(url, {
 		body: JSON.stringify({ contents }),
@@ -94,48 +98,6 @@ const batchGemini = async (payload: { model: string; contents: any[] }): Promise
 // Renaming for export clarity to match llmWrapper's expectations
 const streamGenerateContent = streamGemini;
 const batchGenerateContent = batchGemini;
-
-/**
- * Generates an embedding for a single piece of text using the Gemini API.
- *
- * @param text The text to embed.
- * @param model The embedding model to use (e.g., 'embedding-001').
- * @returns The embedding vector.
- */
-const embedContent = async (text: string, model: string = 'embedding-001'): Promise<number[]> => {
-	if (!config.geminiApiKey) {
-		throw new Error('Gemini API key is not configured.');
-	}
-
-	const url = `${GEMINI_API_BASE_URL}/models/${encodeURIComponent(model)}:embedContent?key=${config.geminiApiKey}`;
-	const payload = {
-		content: {
-			parts: [{ text: text }],
-		},
-	};
-
-	const response = await fetch(url, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-		},
-		body: JSON.stringify(payload),
-	});
-
-	if (!response.ok) {
-		const errorBody = await response.text();
-		console.error(`Gemini API error (embedContent): ${response.status} ${response.statusText}`, errorBody);
-		throw new Error(`Gemini API request failed (embedContent): ${response.status} ${errorBody}`);
-	}
-
-	const data = await response.json();
-	if (data.embedding && data.embedding.value) {
-		return data.embedding.value;
-	} else {
-		console.error("Unexpected Gemini embedding response structure (embedContent):", data);
-		throw new Error("Failed to extract embedding from Gemini response or response format unexpected (embedContent).");
-	}
-};
 
 /**
  * Generates embeddings for multiple pieces of text in a batch using the Gemini API.
@@ -176,7 +138,7 @@ const batchEmbedContents = async (payload: BatchEmbedContentsRequest): Promise<B
     // The individual requests in the payload then specify their respective models.
     // The `payload.requests[0].model` would be like "models/embedding-001"
     // So the base model in the URL is not required.
-    const url = `${GEMINI_API_BASE_URL}/models:batchEmbedContents?key=${config.geminiApiKey}`;
+    const url = `${GEMINI_API_BASE_URL}/models/${config.geminiEmbeddingModel}:batchEmbedContents?key=${config.geminiApiKey}`;
 
     const response = await fetch(url, {
         method: 'POST',
@@ -203,4 +165,4 @@ const batchEmbedContents = async (payload: BatchEmbedContentsRequest): Promise<B
 };
 
 
-export { batchGenerateContent, streamGenerateContent, embedContent, batchEmbedContents };
+export { batchGenerateContent, streamGenerateContent, batchEmbedContents };

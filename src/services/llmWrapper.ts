@@ -4,7 +4,6 @@ import {
     batchEmbedContents as batchGeminiEmbeddings,
     batchGenerateContent as batchGeminiGenerate,
     streamGenerateContent as streamGeminiGenerate
-    // embedContent as getGeminiSingleEmbedding, // Optionally import if direct single text embedding is needed elsewhere
 } from './gemini';
 import { config } from '../config';
 
@@ -47,7 +46,7 @@ export const generateText = async (options: LlmWrapperOptions): Promise<TextGene
       // Assuming fetchOpenaiResponse takes a similar payload structure.
       // This might need adjustment based on actual fetchOpenaiResponse implementation.
       const openaiPayload = {
-        model: config.llm.openai.chatModels[0] || 'gpt-3.5-turbo', // Use a configured default or a common one
+        model: config.openAiChatModel || 'gpt-4.1-nano', // Use a configured default or a common one
         messages: [{ role: 'user', content: options.query }],
         stream: options.stream,
         // TODO: Add temperature, max_tokens etc. from options if provided
@@ -83,7 +82,7 @@ export const generateText = async (options: LlmWrapperOptions): Promise<TextGene
       };
 
     case 'gemini':
-      const geminiModel = config.llm.gemini.textModels[0] || 'gemini-pro'; // Use a configured default
+      const geminiModel = config.geminiChatModel || 'gemini-2.0-flash-lite'; // Use a configured default
       if (options.stream) {
         // streamGeminiGenerate expects a specific payload.
         // This also needs to handle potential streaming aggregation if the caller doesn't want a raw stream.
@@ -117,18 +116,20 @@ export const generateText = async (options: LlmWrapperOptions): Promise<TextGene
         };
 
       } else {
-        const batchResponse = await batchGeminiGenerate({
-          requests: [{
+        const batchResponse = await batchGeminiGenerate(
+          {
             model: `models/${geminiModel}`, // Ensure model name is prefixed
             contents: [{ parts: [{ text: options.query }] }],
             // TODO: Add generationConfig
-          }],
-        });
+          },
+        );
+        console.log("HERE IT ISSSSS")
+        console.log(batchResponse);
+
         // Adapt batchGeminiGenerate response (assuming it's an array of responses)
-        const firstResponse = batchResponse.responses && batchResponse.responses[0];
         let geminiText = '';
-        if (firstResponse && firstResponse.candidates && firstResponse.candidates[0] && firstResponse.candidates[0].content) {
-            geminiText = firstResponse.candidates[0].content.parts.map(p => p.text).join("");
+        if (batchResponse.candidates && batchResponse.candidates[0] && batchResponse.candidates[0].content) {
+            geminiText = batchResponse.candidates[0].content.parts.map(p => p.text).join("");
         } else {
             console.warn("Unexpected Gemini batch response structure:", batchResponse);
             // Fallback or error
@@ -136,7 +137,7 @@ export const generateText = async (options: LlmWrapperOptions): Promise<TextGene
         return {
           text: geminiText,
           provider_model: geminiModel, // Or extract from response if available
-          finish_reason: firstResponse?.candidates[0]?.finishReason,
+          finish_reason: batchResponse?.candidates[0]?.finishReason,
         };
       }
     default:
@@ -155,7 +156,7 @@ export const generateEmbeddings = async (options: LlmWrapperOptions): Promise<Em
 
   switch (options.provider) {
     case 'openai':
-      const openaiEmbeddingModel = config.llm.openai.embeddingModels[0] || "text-embedding-ada-002";
+      const openaiEmbeddingModel = config.openAiEmbeddingModel || "text-embedding-3-small";
       for (const text of textsToEmbed) {
         // getOpenaiEmbedding from openai.ts returns Promise<number[]>
         // It does not return a modelUsed property directly. The model is passed in.
@@ -167,7 +168,7 @@ export const generateEmbeddings = async (options: LlmWrapperOptions): Promise<Em
       return { embeddings: embeddingsData, provider_model: modelUsed };
 
     case 'gemini':
-      const geminiEmbeddingModel = config.llm.gemini.embeddingModels[0] || 'embedding-001';
+      const geminiEmbeddingModel = config.geminiEmbeddingModel || "text-embedding-004";
       // The current batchEmbedContents in gemini.ts takes an array of requests.
       // We need to map our texts to that structure.
       const requests = textsToEmbed.map(text => ({

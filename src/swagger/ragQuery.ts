@@ -23,7 +23,7 @@ const ragQueryPaths = {
                                 llm_model: {
                                     type: "string",
                                     description: "Optional: Specify the LLM model to use (e.g., 'gpt-3.5-turbo', 'gemini-pro'). Defaults to the system's configured default.",
-                                    example: "gpt-3.5-turbo"
+                                    example: "gemini-2.0-flash-lite"
                                 },
                                 n_results: {
                                     type: "integer",

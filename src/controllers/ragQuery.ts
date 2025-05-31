@@ -29,7 +29,7 @@ export const handleRagQuery = async (req: Request, res: Response) => {
         const numberOfResults = typeof n_results === 'number' && n_results > 0 ? n_results : 3;
         const shouldStream = stream === true;
         // modelToUse will be determined by the llmWrapper based on the provider
-        const modelToUse = provider === 'gemini' ? 'gemini-pro' : 'gpt-3.5-turbo'; // Placeholder
+        const modelToUse = provider === 'gemini' ? 'gemini-2.0-flash-lite' : 'gpt-4.1-nano'; // Placeholder
 
         const ragService = await initializedRagService;
         const chunks = await ragService.queryChunks(query, numberOfResults);
