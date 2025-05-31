@@ -5,7 +5,7 @@ import { generateText } from '../services/llmWrapper'; // Import generateText
 
 export const handleRagQuery = async (req: Request, res: Response) => {
     try {
-        const { query, provider: requestProvider, n_results, stream } = req.body;
+        const { query, provider: requestProvider, n_results, stream, rag_type: raw_rag_type } = req.body;
 
         if (!query || typeof query !== 'string' || query.trim() === '') {
             return res.status(400).json({ error: "Bad Request: query is required and must be a non-empty string." });
@@ -15,6 +15,15 @@ export const handleRagQuery = async (req: Request, res: Response) => {
 
         if (provider !== 'openai' && provider !== 'gemini') {
             return res.status(400).json({ error: "Bad Request: provider must be 'openai' or 'gemini'." });
+        }
+
+        let rag_type = 'basic'; // Default rag_type to 'basic'
+        if (raw_rag_type !== undefined) {
+            if (raw_rag_type === 'basic' || raw_rag_type === 'advanced') {
+                rag_type = raw_rag_type;
+            } else {
+                return res.status(400).json({ error: "Bad Request: rag_type must be 'basic' or 'advanced'." });
+            }
         }
 
         const numberOfResults = typeof n_results === 'number' && n_results > 0 ? n_results : 3;
@@ -32,28 +41,37 @@ export const handleRagQuery = async (req: Request, res: Response) => {
             console.warn(`No relevant chunks found for query: "${query}". Querying LLM directly without RAG context.`);
             augmentedPrompt = query; // Use original query
         } else {
-            const uniqueParentContents = new Set<string>();
-            chunks.forEach(chunk => {
-                // Ensure metadata and original_content exist
-                if (chunk.metadata && typeof chunk.metadata.original_content === 'string') {
-                    uniqueParentContents.add(chunk.metadata.original_content);
-                } else if (typeof chunk.document === 'string' && chunk.document.trim() !== '') {
-                    // Fallback to document if original_content is not in metadata (should not happen with current ragService)
-                    // This indicates a potential issue with how original_content is stored/retrieved if it's missing.
-                    // For now, we assume text_chunk is what's in chunk.document if metadata isn't structured as expected.
-                    // The RAG service stores 'original_content' in metadata, so this path is less likely.
-                    // Sticking to 'original_content' from metadata is preferred.
-                    // If 'original_content' is missing, it implies an issue upstream in RAGService's addDocument or queryChunks.
+            let contextContent: string[] = [];
+            if (rag_type === 'advanced') {
+                const uniqueParentContents = new Set<string>();
+                chunks.forEach(chunk => {
+                    if (chunk.metadata && typeof chunk.metadata.original_content === 'string') {
+                        uniqueParentContents.add(chunk.metadata.original_content);
+                    }
+                });
+                if (uniqueParentContents.size > 0) {
+                    contextContent = Array.from(uniqueParentContents);
                 }
-            });
+            } else { // rag_type === 'basic'
+                chunks.forEach(chunk => {
+                    if (chunk.metadata && typeof chunk.metadata.text_chunk === 'string') {
+                        contextContent.push(chunk.metadata.text_chunk);
+                    } else if (typeof chunk.document === 'string' && chunk.document.trim() !== '') {
+                        // Fallback for basic if text_chunk is somehow not in metadata but document content is there
+                        // This is less ideal as ragService is expected to populate metadata.text_chunk
+                        contextContent.push(chunk.document);
+                    }
+                });
+            }
 
-            if (uniqueParentContents.size === 0) {
-                console.warn(`Chunks were found for query "${query}", but no 'original_content' could be extracted. Querying LLM directly.`);
+            if (contextContent.length === 0) {
+                console.warn(`Chunks were found for query "${query}" (rag_type: ${rag_type}), but no relevant content could be extracted. Querying LLM directly.`);
                 augmentedPrompt = query;
             } else {
-                const context = Array.from(uniqueParentContents).join("\n---\n");
+                const context = contextContent.join("\n---\n");
                 systemPrompt = "You are a helpful assistant that answers questions based on the provided context.";
-                augmentedPrompt = `User Query: ${query}\n\nRelevant Information:\n---\n${context}\n---\nBased on the relevant information above, answer the user query.`;
+                const contextDescription = rag_type === 'advanced' ? "Relevant Information from Parent Documents" : "Relevant Text Chunks";
+                augmentedPrompt = `User Query: ${query}\n\n${contextDescription}:\n---\n${context}\n---\nBased on the relevant information above, answer the user query.`;
             }
         }
 

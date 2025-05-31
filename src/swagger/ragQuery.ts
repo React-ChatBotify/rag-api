@@ -34,6 +34,13 @@ const ragQueryPaths = {
                                     type: "boolean",
                                     description: "Optional: Whether to stream the response. Defaults to false.",
                                     example: false
+                                },
+                                rag_type: {
+                                    type: "string",
+                                    description: "Optional: Specifies the type of RAG processing. 'basic' uses individual text chunks for context. 'advanced' uses the full original content of parent documents. Defaults to 'basic'.",
+                                    enum: ['basic', 'advanced'],
+                                    default: 'basic',
+                                    example: 'basic'
                                 }
                             },
                             required: ["query"]
