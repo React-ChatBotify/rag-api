@@ -7,8 +7,9 @@
     "format": "prettier --write \"{src,test,types}/**/*.{ts,tsx,js,json,md}\"",
     "build": "npx tsc --build",
     "lint": "eslint \"{src,test,types}/**/*.ts\" --fix",
-    "dev": "nodemon",
-    "test": "jest"
+    "test": "jest",
+    "dev": "docker compose -p dev -f ./docker/docker-compose.dev.yml down && docker compose -p dev -f ./docker/docker-compose.dev.yml up --build",
+    "dev:watch": "nodemon --config nodemon.json"
   },
   "author": "tjtanjin",
   "license": "MIT",
