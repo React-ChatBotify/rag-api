@@ -15,7 +15,7 @@ import swaggerDocument from './swagger';
 
 const app = express();
 
-const API_PREFIX = `/api/${process.env.API_VERSION}`;
+const API_PREFIX = `/api/${process.env.API_VERSION || 'v1'}`;
 app.use(bodyParser.json());
 app.use(cors());
 app.use(`${API_PREFIX}/`, openaiRouter);
