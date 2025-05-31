@@ -24,7 +24,7 @@ const ensureModelPrefixed = (modelId: string): string => {
  * Sends a streaming chat completion request to the Gemini API via raw fetch
  * and processes the Server-Sent Events (SSE) stream manually.
  *
- * @param modelId The model identifier (e.g., 'gemini-pro').
+ * @param modelId The model identifier (e.g., 'gemini-2.0-flash-lite').
  * @param contents The content parts for the chat.
  * @param onChunk callback function called for each parsed SSE data chunk received from Gemini.
  *
@@ -39,9 +39,8 @@ const streamGemini = async (
 		throw new Error('Gemini API key is not configured.');
 	}
 
-	const fullModelName = ensureModelPrefixed(modelId);
 	const url =
-		`${GEMINI_API_BASE_URL}/${encodeURIComponent(fullModelName)}:streamGenerateContent` +
+		`${GEMINI_API_BASE_URL}/models/${config.geminiChatModel}:streamGenerateContent` +
 		`?alt=sse&key=${config.geminiApiKey}`;
 
 	const bodyPayload: { contents: GeminiContent[] } = { contents };
@@ -90,7 +89,7 @@ const streamGemini = async (
 /**
  * Sends a batch chat completion request to the Gemini API.
  *
- * @param modelId The model identifier (e.g., 'gemini-pro').
+ * @param modelId The model identifier (e.g., 'gemini-2.0-flash-lite').
  * @param contents The content parts for the chat.
  *
  * @throws throw an error if the Gemini API response is not successful.
@@ -104,10 +103,11 @@ const batchGemini = async (
 	}
 
 	// Use the provided modelId, not config.geminiChatModel directly, for flexibility
-	const fullModelName = ensureModelPrefixed(modelId || config.geminiChatModel);
 	const url =
-		`${GEMINI_API_BASE_URL}/${encodeURIComponent(fullModelName)}:generateContent` +
+		`${GEMINI_API_BASE_URL}/models/${config.geminiChatModel}:generateContent` +
 		`?key=${config.geminiApiKey}`;
+
+		console.log(url);
 
 	const bodyPayload: { contents: GeminiContent[] } = { contents };
 

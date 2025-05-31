@@ -62,7 +62,7 @@ export const generateText = async (options: LLMChatRequestOptions): Promise<LLMC
         return { ...response, provider: 'openai' };
       }
     } else if (provider === 'gemini') {
-      const geminiModelId = model || config.geminiChatModel || 'gemini-pro';
+      const geminiModelId = model || config.geminiChatModel || 'gemini-2.0-flash-lite';
       const geminiContents: GeminiContent[] = [{ role: 'user', parts: [{ text: query }] }]; // Gemini now supports role in contents
 
       if (stream) {
@@ -93,7 +93,9 @@ export const generateText = async (options: LLMChatRequestOptions): Promise<LLMC
 };
 
 export const generateEmbeddings = async (options: LLMEmbeddingsRequestOptions): Promise<LLMEmbeddingsResponse> => {
-  const { provider, texts, model } = options;
+  const { provider, text, model } = options;
+
+  const texts = [text];
 
   if (!texts || texts.length === 0) {
     throw new Error('Texts are required for generating embeddings.');
@@ -103,7 +105,7 @@ export const generateEmbeddings = async (options: LLMEmbeddingsRequestOptions): 
     if (provider === 'openai') {
       const openaiEmbeddingModel = model || config.openAiEmbeddingModel || 'text-embedding-ada-002';
       const openaiPayload: OpenAIEmbeddingsPayload = {
-        input: texts,
+        input: [text],
         model: openaiEmbeddingModel as OpenAIEmbeddingModel, // Cast if strict literal
       };
       const response = await getOpenaiEmbedding(openaiPayload);

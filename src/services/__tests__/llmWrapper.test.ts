@@ -48,7 +48,7 @@ jest.mock('../../config', () => ({
         geminiApiKey: 'test-gemini-key',
         openAiChatModel: 'gpt-3.5-turbo-test',
         openAiEmbeddingModel: 'text-embedding-ada-002-test',
-        geminiChatModel: 'gemini-pro-test',
+        geminiChatModel: 'gemini-2.0-flash-lite-test',
         geminiEmbeddingModel: 'embedding-001-test',
         // other necessary config values like RAG_API_KEY etc.
         ragApiKey: 'test-rag-api-key',

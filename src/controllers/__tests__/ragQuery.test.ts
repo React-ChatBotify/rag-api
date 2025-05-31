@@ -72,7 +72,7 @@ describe('RAG Query Controller (handleRagQuery)', () => {
         const req = mockRequest({ query: "test query" }) as Request; // No provider
         const res = mockResponse() as Response;
         mockRagService.queryChunks.mockResolvedValue([]);
-        mockedGenerateText.mockResolvedValue({ text: "LLM response from Gemini", provider_model: "gemini-pro" });
+        mockedGenerateText.mockResolvedValue({ text: "LLM response from Gemini", provider_model: "gemini-2.0-flash-lite" });
 
         await handleRagQuery(req, res);
 
@@ -121,7 +121,7 @@ describe('RAG Query Controller (handleRagQuery)', () => {
             { metadata: { original_content: "Content for doc2" } },
         ];
         mockRagService.queryChunks.mockResolvedValue(mockChunks);
-        mockedGenerateText.mockResolvedValue({ text: "LLM response based on context", provider_model: "gemini-pro" });
+        mockedGenerateText.mockResolvedValue({ text: "LLM response based on context", provider_model: "gemini-2.0-flash-lite" });
 
         await handleRagQuery(req, res);
         
@@ -135,7 +135,7 @@ describe('RAG Query Controller (handleRagQuery)', () => {
         expect(res.status).toHaveBeenCalledWith(200);
         expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
             provider: 'gemini',
-            model: "gemini-pro",
+            model: "gemini-2.0-flash-lite",
             choices: expect.arrayContaining([
                 expect.objectContaining({ message: expect.objectContaining({ content: "LLM response based on context" }) })
             ])

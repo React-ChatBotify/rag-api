@@ -230,11 +230,11 @@ export class RAGService {
                 provider: 'gemini', // Defaulting to gemini for RAG query embeddings
                 text: queryText,
             });
-            if (!embeddingResponse || !embeddingResponse.embeddings || embeddingResponse.embeddings.length === 0 || !embeddingResponse.embeddings[0].embedding) {
+            if (!embeddingResponse || !embeddingResponse.embeddings || embeddingResponse.embeddings.length === 0) {
                 console.error(`Failed to generate query embedding for text: "${queryText}" with provider 'gemini'.`);
                 throw new Error('Failed to generate query embedding.');
             }
-            const queryEmbedding = embeddingResponse.embeddings[0].embedding;
+            const queryEmbedding = embeddingResponse.embeddings[0].values;
             const results = await this.chromaCollection.query({
                 queryEmbeddings: [queryEmbedding],
                 nResults: n_results,

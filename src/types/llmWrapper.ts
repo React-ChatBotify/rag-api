@@ -16,7 +16,7 @@ export interface LLMChatRequestOptions {
 
 export interface LLMEmbeddingsRequestOptions {
   provider: ProviderType;
-  texts: string[]; // Changed from `text?: string; texts?: string[]` to simplify
+  text: string; // Changed from `text?: string; texts?: string[]` to simplify
   model?: string; // Optional model override
 }
 

@@ -42,9 +42,9 @@ export interface GeminiBatchEmbeddingsResponse {
 }
 
 export type GeminiChatModel =
-  | 'gemini-pro'
+  | 'gemini-2.0-flash-lite'
   | 'gemini-1.0-pro'
-  | 'gemini-1.5-flash'; // Note: API expects 'models/gemini-pro'
+  | 'gemini-1.5-flash'; // Note: API expects 'models/gemini-2.0-flash-lite'
 
 export interface GeminiSafetyRating {
   category: string; // e.g., 'HARM_CATEGORY_SEXUALLY_EXPLICIT'
