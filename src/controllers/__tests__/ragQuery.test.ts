@@ -1,15 +1,15 @@
 import { Request, Response } from 'express';
-import { handleRagQuery } from '../ragQuery';
+import { handleGeminiBatch, handleGeminiStream } from '../ragQuery'; // Updated imports
 import { initializedRagService } from '../../services/ragService';
-import { generateText } from '../../services/llmWrapper'; // Import the mocked generateText
+import { generateText } from '../../services/llmWrapper';
+import { GeminiChatCompletionResponse, GeminiStreamChunk } from '../../types';
 
 // Mock llmWrapper
 jest.mock('../../services/llmWrapper', () => ({
     generateText: jest.fn(),
-    generateEmbeddings: jest.fn(), // Though not directly used by handleRagQuery
 }));
 
-// Mock initializedRagService
+// Mock initializedRagService (remains the same)
 jest.mock('../../services/ragService', () => {
     const mockRagServiceInstance = {
         init: jest.fn().mockResolvedValue(undefined),
@@ -21,15 +21,10 @@ jest.mock('../../services/ragService', () => {
     };
 });
 
-// Mock config - no longer needed here as API keys are handled by llmWrapper's underlying services
-// jest.mock('../../config', () => ({ /* ... */ }));
-
-
-const mockRequest = (body: any = {}, params: any = {}, query: any = {}): Partial<Request> => ({
+const mockRequest = (body: any = {}, params: any = {}): Partial<Request> => ({
     body,
     params,
-    query,
-    on: jest.fn(), // For stream 'close' event
+    on: jest.fn(), // For stream 'close' event if needed by stream handler tests
 });
 
 const mockResponse = (): Partial<Response> => {
@@ -39,12 +34,14 @@ const mockResponse = (): Partial<Response> => {
     res.setHeader = jest.fn().mockReturnValue(res);
     res.write = jest.fn().mockReturnValue(res);
     res.end = jest.fn().mockReturnValue(res);
+    res.flushHeaders = jest.fn().mockReturnValue(res); // Added for stream handler
     return res;
 };
 
-describe('RAG Query Controller (handleRagQuery)', () => {
+describe('Gemini RAG Query Controllers', () => {
     let mockRagService: any;
     let mockedGenerateText: jest.Mock;
+    const testModel = "gemini-pro-test"; // Example model name
 
     beforeEach(async () => {
         jest.clearAllMocks();
@@ -52,304 +49,230 @@ describe('RAG Query Controller (handleRagQuery)', () => {
         mockedGenerateText = generateText as jest.Mock;
     });
 
-    it('should return 400 if query is missing', async () => {
-        const req = mockRequest({ provider: 'gemini' }) as Request; // Provider is optional but good to include
-        const res = mockResponse() as Response;
-        await handleRagQuery(req, res);
-        expect(res.status).toHaveBeenCalledWith(400);
-        expect(res.json).toHaveBeenCalledWith({ error: "Bad Request: query is required and must be a non-empty string." });
-    });
-
-    it('should return 400 if provider is invalid', async () => {
-        const req = mockRequest({ query: "test query", provider: "invalidProvider" }) as Request;
-        const res = mockResponse() as Response;
-        await handleRagQuery(req, res);
-        expect(res.status).toHaveBeenCalledWith(400);
-        expect(res.json).toHaveBeenCalledWith({ error: "Bad Request: provider must be 'openai' or 'gemini'." });
-    });
-
-    it('should use "gemini" as default provider if none is specified', async () => {
-        const req = mockRequest({ query: "test query" }) as Request; // No provider
-        const res = mockResponse() as Response;
-        mockRagService.queryChunks.mockResolvedValue([]);
-        mockedGenerateText.mockResolvedValue({ text: "LLM response from Gemini", provider_model: "gemini-2.0-flash-lite" });
-
-        await handleRagQuery(req, res);
-
-        expect(mockRagService.queryChunks).toHaveBeenCalledWith("test query", 3);
-        expect(mockedGenerateText).toHaveBeenCalledWith({
-            provider: 'gemini',
-            query: "test query", // No context, so original query
+    describe('handleGeminiBatch', () => {
+        it('should return 400 if query is missing', async () => {
+            const req = mockRequest({}, { model: `${testModel}:generateContent` }) as Request;
+            const res = mockResponse() as Response;
+            await handleGeminiBatch(req, res);
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(res.json).toHaveBeenCalledWith({ error: "Bad Request: query is required and must be a non-empty string." });
         });
-        expect(res.status).toHaveBeenCalledWith(200);
-        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-            provider: 'gemini',
-            choices: expect.arrayContaining([
-                expect.objectContaining({ message: expect.objectContaining({ content: "LLM response from Gemini" }) })
-            ])
-        }));
-    });
 
-    it('should handle query with no relevant chunks, calling llmWrapper with OpenAI provider', async () => {
-        const req = mockRequest({ query: "test query", provider: "openai", stream: false }) as Request;
-        const res = mockResponse() as Response;
-        mockRagService.queryChunks.mockResolvedValue([]); // No chunks
-        mockedGenerateText.mockResolvedValue({ text: "LLM response from OpenAI", provider_model: "gpt-3.5-turbo" });
+        it('should handle query with no relevant chunks, calling generateText with original query', async () => {
+            const req = mockRequest({ query: "test query" }, { model: `${testModel}:generateContent` }) as Request;
+            const res = mockResponse() as Response;
+            mockRagService.queryChunks.mockResolvedValue([]);
+            const mockLLMResponse: GeminiChatCompletionResponse = { // Added index
+                candidates: [{ index: 0, content: { parts: [{ text: "LLM response" }], role: "model" }, finishReason: "STOP" }],
+            };
+            mockedGenerateText.mockResolvedValue(mockLLMResponse);
 
-        await handleRagQuery(req, res);
+            await handleGeminiBatch(req, res);
 
-        expect(mockRagService.queryChunks).toHaveBeenCalledWith("test query", 3);
-        expect(mockedGenerateText).toHaveBeenCalledWith({
-            provider: 'openai',
-            query: "test query", // Original query passed as augmentedPrompt
+            expect(mockRagService.queryChunks).toHaveBeenCalledWith("test query", 3); // Default n_results
+            expect(mockedGenerateText).toHaveBeenCalledWith({
+                query: "test query", // Original query passed as augmentedPrompt
+                stream: false,
+                model: testModel,
+            });
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith(mockLLMResponse);
         });
-        expect(res.status).toHaveBeenCalledWith(200);
-        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-            provider: 'openai',
-            model: "gpt-3.5-turbo",
-            choices: expect.arrayContaining([
-                expect.objectContaining({ message: expect.objectContaining({ content: "LLM response from OpenAI" }) })
-            ])
-        }));
-    });
 
-    it('should handle query with relevant chunks, calling llmWrapper with Gemini provider and augmented prompt', async () => {
-        const req = mockRequest({ query: "test query", provider: "gemini", n_results: 2, stream: false }) as Request;
-        const res = mockResponse() as Response;
-        const mockChunks = [
-            { metadata: { original_content: "Content for doc1" } },
-            { metadata: { original_content: "Content for doc2" } },
-        ];
-        mockRagService.queryChunks.mockResolvedValue(mockChunks);
-        mockedGenerateText.mockResolvedValue({ text: "LLM response based on context", provider_model: "gemini-2.0-flash-lite" });
+        it('should handle query with relevant chunks, calling generateText with augmented prompt', async () => {
+            const req = mockRequest({ query: "test query", n_results: 2, rag_type: "basic" }, { model: `${testModel}:generateContent` }) as Request;
+            const res = mockResponse() as Response;
+            const mockChunks = [
+                { metadata: { text_chunk: "Chunk 1 text." } },
+                { metadata: { text_chunk: "Chunk 2 text." } },
+            ];
+            mockRagService.queryChunks.mockResolvedValue(mockChunks);
+            const mockLLMResponse: GeminiChatCompletionResponse = { // Added index
+                candidates: [{ index: 0, content: { parts: [{ text: "LLM response based on context" }], role: "model" }, finishReason: "STOP" }],
+            };
+            mockedGenerateText.mockResolvedValue(mockLLMResponse);
 
-        await handleRagQuery(req, res);
+            await handleGeminiBatch(req, res);
+
+            const expectedContext = "Chunk 1 text.\n---\nChunk 2 text.";
+            const expectedAugmentedPrompt = `User Query: test query\n\nRelevant Text Chunks:\n---\n${expectedContext}\n---\nBased on the relevant information above, answer the user query.`;
+
+            expect(mockRagService.queryChunks).toHaveBeenCalledWith("test query", 2);
+            expect(mockedGenerateText).toHaveBeenCalledWith({
+                query: expectedAugmentedPrompt,
+                stream: false,
+                model: testModel,
+            });
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith(mockLLMResponse);
+        });
         
-        const expectedAugmentedPrompt = `User Query: test query\n\nRelevant Information:\n---\nContent for doc1\n---\nContent for doc2\n---\nBased on the relevant information above, answer the user query.`;
+        it('should return 503 if RAG service (queryChunks) fails', async () => {
+            const req = mockRequest({ query: "test query" }, { model: `${testModel}:generateContent` }) as Request;
+            const res = mockResponse() as Response;
+            mockRagService.queryChunks.mockRejectedValue(new Error('ChromaDB collection is not initialized.'));
 
-        expect(mockRagService.queryChunks).toHaveBeenCalledWith("test query", 2);
-        expect(mockedGenerateText).toHaveBeenCalledWith({
-            provider: 'gemini',
-            query: expectedAugmentedPrompt,
+            await handleGeminiBatch(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(503);
+            expect(res.json).toHaveBeenCalledWith({ error: "Service Unavailable: RAG service is not ready." });
         });
-        expect(res.status).toHaveBeenCalledWith(200);
-        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-            provider: 'gemini',
-            model: "gemini-2.0-flash-lite",
-            choices: expect.arrayContaining([
-                expect.objectContaining({ message: expect.objectContaining({ content: "LLM response based on context" }) })
-            ])
-        }));
-    });
     
-    it('should handle query with chunks but no original_content, using original query for llmWrapper', async () => {
-        const req = mockRequest({ query: "original query", provider: "openai", stream: false }) as Request;
-        const res = mockResponse() as Response;
-        const mockChunks = [ { metadata: { /* no original_content */ } } ];
-        mockRagService.queryChunks.mockResolvedValue(mockChunks);
-        mockedGenerateText.mockResolvedValue({ text: "Response using original query", provider_model: "gpt-4" });
+        it('should return 500 if llmWrapper.generateText fails', async () => {
+            const req = mockRequest({ query: "test query" }, { model: `${testModel}:generateContent` }) as Request;
+            const res = mockResponse() as Response;
+            mockRagService.queryChunks.mockResolvedValue([]);
+            mockedGenerateText.mockRejectedValue(new Error("LLM provider outage"));
 
-        await handleRagQuery(req, res);
-        
-        expect(mockRagService.queryChunks).toHaveBeenCalledWith("original query", 3);
-        expect(mockedGenerateText).toHaveBeenCalledWith({
-            provider: 'openai',
-            query: "original query", // Should fallback to original query
+            await handleGeminiBatch(req, res);
+
+            expect(mockedGenerateText).toHaveBeenCalled();
+            expect(res.status).toHaveBeenCalledWith(500);
+            expect(res.json).toHaveBeenCalledWith({ error: `Failed to get response from LLM provider Gemini.`, details: "LLM provider outage" });
         });
-        expect(res.status).toHaveBeenCalledWith(200);
-        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-            provider: 'openai',
-            model: "gpt-4",
-            choices: expect.arrayContaining([
-                expect.objectContaining({ message: expect.objectContaining({ content: "Response using original query" }) })
-            ])
-        }));
-    });
 
-    it('should return 501 Not Implemented for streaming requests', async () => {
-        const req = mockRequest({ query: "test query stream", provider: "gemini", stream: true }) as Request;
-        const res = mockResponse() as Response;
-        mockRagService.queryChunks.mockResolvedValue([]); // To proceed to LLM call part
+        describe('handleGeminiBatch - RAG Type Functionality', () => {
+            const mockChunksWithAllMetadata = [
+                { metadata: { text_chunk: "Chunk 1 text.", original_content: "Parent document 1 content." } },
+                { metadata: { text_chunk: "Chunk 2 text.", original_content: "Parent document 2 content." } },
+                { metadata: { text_chunk: "Chunk 3 text from doc 1.", original_content: "Parent document 1 content." } },
+            ];
+             const mockLLMResponse: GeminiChatCompletionResponse = { // Added index
+                candidates: [{ index: 0, content: { parts: [{ text: "LLM response" }], role: "model" }, finishReason: "STOP" }],
+            };
 
-        await handleRagQuery(req, res);
+            it('should default to "basic" RAG if rag_type is not provided', async () => {
+                const req = mockRequest({ query: "test query" }, { model: `${testModel}:generateContent` }) as Request;
+                const res = mockResponse() as Response;
+                mockRagService.queryChunks.mockResolvedValue(mockChunksWithAllMetadata.slice(0, 2));
+                mockedGenerateText.mockResolvedValue(mockLLMResponse);
+                await handleGeminiBatch(req, res);
+                const expectedContext = `${mockChunksWithAllMetadata[0].metadata.text_chunk}\n---\n${mockChunksWithAllMetadata[1].metadata.text_chunk}`;
+                const expectedAugmentedPrompt = `User Query: test query\n\nRelevant Text Chunks:\n---\n${expectedContext}\n---\nBased on the relevant information above, answer the user query.`;
+                expect(mockedGenerateText).toHaveBeenCalledWith(expect.objectContaining({ query: expectedAugmentedPrompt, model: testModel, stream: false }));
+            });
 
-        expect(res.status).toHaveBeenCalledWith(501);
-        expect(res.json).toHaveBeenCalledWith({ error: "Streaming not implemented for this provider via RAG query." });
-        expect(mockedGenerateText).not.toHaveBeenCalled(); // generateText should not be called
-    });
+            it('should use "advanced" RAG when rag_type is "advanced"', async () => {
+                const req = mockRequest({ query: "test query", rag_type: "advanced" }, { model: `${testModel}:generateContent` }) as Request;
+                const res = mockResponse() as Response;
+                mockRagService.queryChunks.mockResolvedValue(mockChunksWithAllMetadata);
+                mockedGenerateText.mockResolvedValue(mockLLMResponse);
+                await handleGeminiBatch(req, res);
+                const expectedContext = `${mockChunksWithAllMetadata[0].metadata.original_content}\n---\n${mockChunksWithAllMetadata[1].metadata.original_content}`; // Unique parents
+                const expectedAugmentedPrompt = `User Query: test query\n\nRelevant Information from Parent Documents:\n---\n${expectedContext}\n---\nBased on the relevant information above, answer the user query.`;
+                expect(mockedGenerateText).toHaveBeenCalledWith(expect.objectContaining({ query: expectedAugmentedPrompt, model: testModel, stream: false }));
+            });
 
-    it('should return 503 if RAG service (queryChunks) fails', async () => {
-        const req = mockRequest({ query: "test query", provider: "gemini" }) as Request;
-        const res = mockResponse() as Response;
-        mockRagService.queryChunks.mockRejectedValue(new Error('ChromaDB collection is not initialized.'));
-        
-        await handleRagQuery(req, res);
-        
-        expect(res.status).toHaveBeenCalledWith(503);
-        expect(res.json).toHaveBeenCalledWith({ error: "Service Unavailable: RAG service is not ready." });
-    });
-    
-    it('should return 500 if llmWrapper.generateText fails', async () => {
-        const req = mockRequest({ query: "test query", provider: "openai" }) as Request;
-        const res = mockResponse() as Response;
-        mockRagService.queryChunks.mockResolvedValue([]); // Success from RAG
-        mockedGenerateText.mockRejectedValue(new Error("LLM provider outage"));
-
-        await handleRagQuery(req, res);
-
-        expect(mockedGenerateText).toHaveBeenCalled();
-        expect(res.status).toHaveBeenCalledWith(500);
-        expect(res.json).toHaveBeenCalledWith({ error: "Failed to get response from LLM provider openai.", details: "LLM provider outage" });
-    });
-
-    // Removed tests for llm_model, API key configuration issues in controller,
-    // as these responsibilities are now delegated to llmWrapper or its underlying services.
-});
-
-describe('handleRagQuery - RAG Type Functionality', () => {
-    let mockRagService: any;
-    let mockedGenerateText: jest.Mock;
-
-    const mockChunksWithAllMetadata = [
-        { metadata: { text_chunk: "Chunk 1 text.", original_content: "Parent document 1 content." } },
-        { metadata: { text_chunk: "Chunk 2 text.", original_content: "Parent document 2 content." } },
-        { metadata: { text_chunk: "Chunk 3 text from doc 1.", original_content: "Parent document 1 content." } }, // Duplicate parent
-    ];
-
-    beforeEach(async () => {
-        jest.clearAllMocks();
-        mockRagService = await initializedRagService;
-        mockedGenerateText = generateText as jest.Mock;
-        mockedGenerateText.mockResolvedValue({ text: "LLM response", provider_model: "mock-model" }); // Default mock response
-    });
-
-    it('should default to "basic" RAG if rag_type is not provided, using text_chunk for context', async () => {
-        const req = mockRequest({ query: "test query", provider: "gemini" }) as Request; // rag_type not provided
-        const res = mockResponse() as Response;
-        mockRagService.queryChunks.mockResolvedValue(mockChunksWithAllMetadata.slice(0, 2)); // Use 2 chunks for simplicity
-
-        await handleRagQuery(req, res);
-
-        const expectedContext = `${mockChunksWithAllMetadata[0].metadata.text_chunk}\n---\n${mockChunksWithAllMetadata[1].metadata.text_chunk}`;
-        const expectedAugmentedPrompt = `User Query: test query\n\nRelevant Text Chunks:\n---\n${expectedContext}\n---\nBased on the relevant information above, answer the user query.`;
-
-        expect(mockRagService.queryChunks).toHaveBeenCalledWith("test query", 3); // Default n_results
-        expect(mockedGenerateText).toHaveBeenCalledWith({
-            provider: 'gemini',
-            query: expectedAugmentedPrompt,
+            it('should return 400 if rag_type is invalid', async () => {
+                const req = mockRequest({ query: "test query", rag_type: "super_advanced" }, { model: `${testModel}:generateContent` }) as Request;
+                const res = mockResponse() as Response;
+                await handleGeminiBatch(req, res);
+                expect(res.status).toHaveBeenCalledWith(400);
+                expect(res.json).toHaveBeenCalledWith({ error: "Bad Request: rag_type must be 'basic' or 'advanced'." });
+            });
         });
-        expect(res.status).toHaveBeenCalledWith(200);
-        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-            choices: expect.arrayContaining([
-                expect.objectContaining({ message: expect.objectContaining({ content: "LLM response" }) })
-            ])
-        }));
     });
 
-    it('should use "basic" RAG when rag_type is "basic", using text_chunk for context', async () => {
-        const req = mockRequest({ query: "test query", provider: "openai", rag_type: "basic" }) as Request;
-        const res = mockResponse() as Response;
-        mockRagService.queryChunks.mockResolvedValue(mockChunksWithAllMetadata.slice(0, 2));
-
-        await handleRagQuery(req, res);
-
-        const expectedContext = `${mockChunksWithAllMetadata[0].metadata.text_chunk}\n---\n${mockChunksWithAllMetadata[1].metadata.text_chunk}`;
-        const expectedAugmentedPrompt = `User Query: test query\n\nRelevant Text Chunks:\n---\n${expectedContext}\n---\nBased on the relevant information above, answer the user query.`;
-
-        expect(mockedGenerateText).toHaveBeenCalledWith({
-            provider: 'openai',
-            query: expectedAugmentedPrompt,
+    describe('handleGeminiStream', () => {
+        it('should return 400 if query is missing', async () => {
+            const req = mockRequest({}, { model: `${testModel}:streamGenerateContent` }) as Request;
+            const res = mockResponse() as Response;
+            await handleGeminiStream(req, res);
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(res.json).toHaveBeenCalledWith({ error: "Bad Request: query is required and must be a non-empty string." });
         });
-        expect(res.status).toHaveBeenCalledWith(200);
-    });
 
-    it('should use "advanced" RAG when rag_type is "advanced", using unique original_content for context', async () => {
-        const req = mockRequest({ query: "test query", provider: "gemini", rag_type: "advanced" }) as Request;
-        const res = mockResponse() as Response;
-        mockRagService.queryChunks.mockResolvedValue(mockChunksWithAllMetadata); // Provide all 3 chunks
+        it('should set up SSE headers and stream responses', async () => {
+            const req = mockRequest({ query: "test query stream" }, { model: `${testModel}:streamGenerateContent` }) as Request;
+            const res = mockResponse() as Response;
+            mockRagService.queryChunks.mockResolvedValue([]);
 
-        await handleRagQuery(req, res);
+            const streamChunk1: GeminiStreamChunk = { candidates: [{ index:0, content: { parts: [{ text: "Stream chunk 1" }], role: "model" }, finishReason: "SAFETY" }] }; // Added index
+            const streamChunk2: GeminiStreamChunk = { candidates: [{ index:0, content: { parts: [{ text: "Stream chunk 2" }], role: "model" }, finishReason: "STOP" }] }; // Added index
 
-        // Expect unique parent documents
-        const expectedContext = `${mockChunksWithAllMetadata[0].metadata.original_content}\n---\n${mockChunksWithAllMetadata[1].metadata.original_content}`;
-        const expectedAugmentedPrompt = `User Query: test query\n\nRelevant Information from Parent Documents:\n---\n${expectedContext}\n---\nBased on the relevant information above, answer the user query.`;
+            mockedGenerateText.mockImplementation(async (options) => {
+                if (options.onChunk) {
+                    options.onChunk(streamChunk1);
+                    options.onChunk(streamChunk2);
+                }
+            });
 
-        expect(mockedGenerateText).toHaveBeenCalledWith({
-            provider: 'gemini',
-            query: expectedAugmentedPrompt,
+            await handleGeminiStream(req, res);
+
+            expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/event-stream');
+            expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-cache');
+            expect(res.setHeader).toHaveBeenCalledWith('Connection', 'keep-alive');
+            expect(res.flushHeaders).toHaveBeenCalled();
+
+            expect(mockedGenerateText).toHaveBeenCalledWith({
+                query: "test query stream",
+                stream: true,
+                model: testModel,
+                onChunk: expect.any(Function)
+            });
+
+            expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify(streamChunk1)}\n\n`);
+            expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify(streamChunk2)}\n\n`);
+            expect(res.end).toHaveBeenCalled();
         });
-        expect(res.status).toHaveBeenCalledWith(200);
-    });
 
-    it('should handle "advanced" RAG with no original_content in some chunks gracefully', async () => {
-        const req = mockRequest({ query: "test query", provider: "gemini", rag_type: "advanced" }) as Request;
-        const res = mockResponse() as Response;
-        const mixedChunks = [
-            { metadata: { text_chunk: "Chunk 1 text.", original_content: "Parent document 1 content." } },
-            { metadata: { text_chunk: "Chunk 2 text." /* no original_content */ } },
-            { metadata: { text_chunk: "Chunk 3 text.", original_content: "Parent document 3 content." } },
-        ];
-        mockRagService.queryChunks.mockResolvedValue(mixedChunks);
+        it('should handle error from generateText by writing to stream if headers sent', async () => {
+            const req = mockRequest({ query: "test query stream" }, { model: `${testModel}:streamGenerateContent` }) as Request;
+            const res = mockResponse() as Response;
+            mockRagService.queryChunks.mockResolvedValue([]);
+            mockedGenerateText.mockRejectedValue(new Error("LLM stream error"));
 
-        await handleRagQuery(req, res);
+            await handleGeminiStream(req, res);
 
-        const expectedContext = `${mixedChunks[0].metadata.original_content}\n---\n${mixedChunks[2].metadata.original_content}`;
-        const expectedAugmentedPrompt = `User Query: test query\n\nRelevant Information from Parent Documents:\n---\n${expectedContext}\n---\nBased on the relevant information above, answer the user query.`;
-
-        expect(mockedGenerateText).toHaveBeenCalledWith({
-            provider: 'gemini',
-            query: expectedAugmentedPrompt,
+            expect(res.flushHeaders).toHaveBeenCalled();
+            expect(mockedGenerateText).toHaveBeenCalled();
+            expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({ error: "Failed to get response from LLM provider Gemini.", details: "LLM stream error" })}\n\n`);
+            expect(res.end).toHaveBeenCalled();
         });
-        expect(res.status).toHaveBeenCalledWith(200);
-    });
 
-    it('should fall back to original query if "advanced" RAG results in no usable original_content', async () => {
-        const req = mockRequest({ query: "test query", provider: "gemini", rag_type: "advanced" }) as Request;
-        const res = mockResponse() as Response;
-        const noOriginalContentChunks = [
-            { metadata: { text_chunk: "Chunk 1 text." /* no original_content */ } },
-            { metadata: { text_chunk: "Chunk 2 text." /* no original_content */ } },
-        ];
-        mockRagService.queryChunks.mockResolvedValue(noOriginalContentChunks);
+        it('should handle RAG service error by writing to stream if headers sent', async () => {
+            const req = mockRequest({ query: "test query" }, { model: `${testModel}:streamGenerateContent` }) as Request;
+            const res = mockResponse() as Response;
 
-        await handleRagQuery(req, res);
+            mockRagService.queryChunks.mockRejectedValue(new Error('ChromaDB collection is not initialized.'));
+            // Simulate headers already sent for this specific test case of stream error
+            (res as any).headersSent = true;
 
-        // Expect original query because no original_content was found
-        expect(mockedGenerateText).toHaveBeenCalledWith({
-            provider: 'gemini',
-            query: "test query",
+
+            await handleGeminiStream(req, res);
+
+            expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({ error: "Service Unavailable: RAG service is not ready.", details: "ChromaDB collection is not initialized." })}\n\n`);
+            expect(res.end).toHaveBeenCalled();
         });
-        expect(res.status).toHaveBeenCalledWith(200);
-    });
 
-    it('should fall back to original query if "basic" RAG results in no usable text_chunk (or document fallback)', async () => {
-        const req = mockRequest({ query: "test query", provider: "gemini", rag_type: "basic" }) as Request;
-        const res = mockResponse() as Response;
-        const noTextChunkContent = [
-            { metadata: { /* no text_chunk, no original_content */ } },
-            // document field is another fallback, let's assume it's also empty or not what we want for this specific test
-            { metadata: {}, document: "  " },
-        ];
-        mockRagService.queryChunks.mockResolvedValue(noTextChunkContent);
+        it('handleGeminiStream - should use "basic" RAG with augmented prompt', async () => {
+            const req = mockRequest({ query: "test query", rag_type: "basic" }, { model: `${testModel}:streamGenerateContent` }) as Request;
+            const res = mockResponse() as Response;
+            const mockChunks = [{ metadata: { text_chunk: "Stream chunk context." } }];
+            mockRagService.queryChunks.mockResolvedValue(mockChunks);
 
-        await handleRagQuery(req, res);
+            mockedGenerateText.mockImplementation(async (options) => { /* do nothing */ });
 
-        expect(mockedGenerateText).toHaveBeenCalledWith({
-            provider: 'gemini',
-            query: "test query", // Expect original query
+            await handleGeminiStream(req, res);
+
+            const expectedContext = "Stream chunk context.";
+            const expectedAugmentedPrompt = `User Query: test query\n\nRelevant Text Chunks:\n---\n${expectedContext}\n---\nBased on the relevant information above, answer the user query.`;
+
+            expect(mockedGenerateText).toHaveBeenCalledWith(expect.objectContaining({
+                query: expectedAugmentedPrompt,
+                stream: true,
+                model: testModel,
+            }));
+            expect(res.end).toHaveBeenCalled();
         });
-        expect(res.status).toHaveBeenCalledWith(200);
-    });
 
-
-    it('should return 400 if rag_type is invalid', async () => {
-        const req = mockRequest({ query: "test query", provider: "openai", rag_type: "super_advanced" }) as Request;
-        const res = mockResponse() as Response;
-
-        await handleRagQuery(req, res);
-
-        expect(res.status).toHaveBeenCalledWith(400);
-        expect(res.json).toHaveBeenCalledWith({ error: "Bad Request: rag_type must be 'basic' or 'advanced'." });
-        expect(mockedGenerateText).not.toHaveBeenCalled();
+        it('should return SSE error if rag_type is invalid after headers sent', async () => {
+            const req = mockRequest({ query: "test query", rag_type: "super_advanced" }, { model: `${testModel}:streamGenerateContent` }) as Request;
+            const res = mockResponse() as Response;
+            await handleGeminiStream(req, res);
+            expect(res.flushHeaders).toHaveBeenCalled();
+            expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({ error: "Bad Request: rag_type must be 'basic' or 'advanced'." })}\n\n`);
+            expect(res.end).toHaveBeenCalled();
+        });
     });
 });

@@ -10,7 +10,7 @@ import { config } from './config';
 // import { geminiRouter } from './routers/gemini'; // Removed
 // import { openaiRouter } from './routers/openai'; // Removed
 import { ragManagementRouter } from './routers/ragManagement';
-import { ragQueryRouter } from './routers/ragQuery';
+import { geminiRouter } from './routers/ragQuery';
 import swaggerDocument from './swagger';
 
 const app = express();
@@ -22,7 +22,7 @@ app.use(cors());
 // app.use(`${API_PREFIX}/`, geminiRouter); // Removed
 // app.use(`${API_PREFIX}/`, customRouter); // Removed
 app.use(`${API_PREFIX}/rag/manage`, ragManagementRouter);
-app.use(`${API_PREFIX}/rag`, ragQueryRouter);
+app.use(`${API_PREFIX}/`, geminiRouter);
 
 // grab all swagger path files
 const swaggerDir = path.join(__dirname, './swagger');

@@ -1,9 +1,12 @@
 import { Router } from 'express';
-import { handleRagQuery } from '../controllers/ragQuery';
+import { handleGeminiBatch, handleGeminiStream } from '../controllers/ragQuery';
 
-const ragQueryRouter = Router();
+const geminiRouter = Router();
 
-// This endpoint is public and does not use apiKeyAuth
-ragQueryRouter.post('/query', handleRagQuery);
+// Route for batch processing
+geminiRouter.post('/gemini/models/:model:generateContent', handleGeminiBatch);
 
-export { ragQueryRouter };
+// Route for streaming
+geminiRouter.post('/gemini/models/:model:streamGenerateContent', handleGeminiStream);
+
+export { geminiRouter };

@@ -1,33 +1,25 @@
-import * as OpenAI from './openai';
 import * as Gemini from './gemini';
 
-export type ProviderType = 'openai' | 'gemini';
+// ProviderType is removed as it's no longer needed.
 
 export interface LLMChatRequestOptions {
-  provider: ProviderType;
-  query: string; // Simplified for now, will be mapped to provider-specific messages/contents
+  // provider field removed
+  query: string;
   stream?: boolean;
   model?: string; // Optional model override
-  onChunk?: (
-    chunk: OpenAI.OpenAIChatCompletionChunk | Gemini.GeminiStreamChunk
-  ) => void; // For streaming
+  onChunk?: (chunk: Gemini.GeminiStreamChunk) => void; // For streaming, now only Gemini
   // Add other common parameters like temperature, max_tokens if they are to be abstracted.
 }
 
 export interface LLMEmbeddingsRequestOptions {
-  provider: ProviderType;
-  text: string; // Changed from `text?: string; texts?: string[]` to simplify
+  // provider field removed
+  text: string | string[]; // Allow single or multiple texts for embeddings
   model?: string; // Optional model override
 }
 
-export type LLMChatResponse =
-  | (OpenAI.OpenAIChatCompletionResponse & { provider: 'openai' })
-  | (Gemini.GeminiChatCompletionResponse & { provider: 'gemini' });
+// Types are no longer unions and no longer have the provider field.
+export type LLMChatResponse = Gemini.GeminiChatCompletionResponse;
 
-export type LLMEmbeddingsResponse =
-  | (OpenAI.OpenAIEmbeddingsResponse & { provider: 'openai' })
-  | (Gemini.GeminiBatchEmbeddingsResponse & { provider: 'gemini' });
+export type LLMEmbeddingsResponse = Gemini.GeminiBatchEmbeddingsResponse;
 
-export type LLMStreamChunk =
-  | (OpenAI.OpenAIChatCompletionChunk & { provider: 'openai' })
-  | (Gemini.GeminiStreamChunk & { provider: 'gemini' });
+export type LLMStreamChunk = Gemini.GeminiStreamChunk;
