@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { initializedRagService } from '../services/ragService';
+import parentDocumentService from '../services/parentDocumentService'; // Added
 import { config } from '../config'; // Used for potential fallback model names if not sending through llmWrapper
 import { generateText } from '../services/llmWrapper';
 import {
@@ -52,14 +53,24 @@ export const handleRagQuery = async (req: Request, res: Response) => {
         } else {
             let contextContent: string[] = [];
             if (rag_type === 'advanced') {
-                const uniqueParentContents = new Set<string>();
+                const uniqueParentIds = new Set<string>();
                 chunks.forEach(chunk => {
-                    if (chunk.metadata && typeof chunk.metadata.original_content === 'string') {
-                        uniqueParentContents.add(chunk.metadata.original_content);
+                    if (chunk.metadata && typeof chunk.metadata.parent_document_id === 'string') {
+                        uniqueParentIds.add(chunk.metadata.parent_document_id);
                     }
                 });
-                if (uniqueParentContents.size > 0) {
-                    contextContent = Array.from(uniqueParentContents);
+
+                if (uniqueParentIds.size > 0) {
+                    const parentContents: string[] = [];
+                    for (const docId of uniqueParentIds) {
+                        const content = await parentDocumentService.getDocument(docId);
+                        if (content !== null) {
+                            parentContents.push(content);
+                        }
+                    }
+                    if (parentContents.length > 0) {
+                        contextContent = parentContents;
+                    }
                 }
             } else { // rag_type === 'basic'
                 chunks.forEach(chunk => {

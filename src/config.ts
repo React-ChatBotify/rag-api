@@ -27,4 +27,8 @@ export const config = {
 	chromaTenant: process.env.CHROMA_TENANT || 'default_tenant',
 	chromaDatabase: process.env.CHROMA_DATABASE || 'default_database',
 	chromaAuthToken: process.env.CHROMA_AUTH_TOKEN,
+
+	// MongoDB Configuration
+	mongoDbUri: process.env.MONGODB_URI!, // e.g., mongodb://localhost:27017
+	mongoDbName: process.env.MONGODB_NAME || 'rag_parent_documents',
 };

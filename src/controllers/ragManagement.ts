@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { initializedRagService } from '../services/ragService';
+import parentDocumentService from '../services/parentDocumentService';
 
 export const createDocument = async (req: Request, res: Response) => {
     try {
@@ -32,8 +33,8 @@ export const getDocument = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "Bad Request: documentId parameter is required." });
         }
 
-        const ragService = await initializedRagService;
-        const content = await ragService.getParentDocumentContent(documentId);
+        // const ragService = await initializedRagService; // ragService instance not needed for getDocument via parentDocumentService
+        const content = await parentDocumentService.getDocument(documentId);
 
         if (content !== null) {
             return res.status(200).json({ documentId, content });
@@ -90,10 +91,11 @@ export const deleteDocument = async (req: Request, res: Response) => {
         }
 
         const ragService = await initializedRagService;
-        await ragService.deleteDocument(documentId);
-        // deleteDocument in RAGService doesn't throw if document not found, just logs.
-        // So, a 200 is fine here, or 204. 200 with message is more informative.
-        return res.status(200).json({ message: "Document deleted successfully (or did not exist)", documentId });
+        await ragService.deleteDocumentAndChunks(documentId);
+        // deleteDocumentAndChunks in RAGService handles deleting from both ChromaDB and MongoDB.
+        // It logs internally if parts are not found or already deleted.
+        // A 200 response indicates the operation was attempted and completed.
+        return res.status(200).json({ message: "Document and its associated chunks processed for deletion.", documentId });
     } catch (error: any) {
         console.error(`Error in deleteDocument for ID ${req.params.documentId}:`, error);
         if (error.message && error.message.includes("ChromaDB collection is not initialized")) {

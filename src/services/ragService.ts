@@ -1,5 +1,6 @@
 import { ChromaClient } from 'chromadb-client';
 // import { pipeline, Pipeline } from '@xenova/transformers'; // Removed
+import parentDocumentService from './parentDocumentService'; // Added
 import { marked } from 'marked';
 import { v4 as uuidv4 } from 'uuid';
 import { Buffer } from 'buffer'; // Added for Basic Auth
@@ -47,6 +48,8 @@ export class RAGService {
         // The tenant and database are now configured at the client level via headers.
         // The collection name itself does not usually include tenant/database prefixes with this client setup.
         try {
+      // Ensure ParentDocumentService is initialized (if it had an async init)
+      // await parentDocumentService.init(); // Assuming parentDocumentService's init is called if needed
             this.chromaCollection = await this.chromaClient.getOrCreateCollection({
                 name: this.collectionName,
                 // Optional: metadata: { "hnsw:space": "cosine" }
@@ -59,7 +62,7 @@ export class RAGService {
     }
 
     // More methods will be added here
-    public chunkMarkdown(markdownContent: string, parentDocumentId: string): Array<{ id: string, text: string, parent_document_id: string, original_content: string }> {
+  public chunkMarkdown(markdownContent: string, parentDocumentId: string): Array<{ id: string, text: string, parent_document_id: string }> {
         const htmlContent = marked.parse(markdownContent);
         // A simple way to split by paragraphs; more sophisticated methods might be needed for complex HTML.
         const paragraphs = htmlContent.split(/<\/?p>/).filter(p => p.trim() !== '');
@@ -73,15 +76,17 @@ export class RAGService {
                 id: uuidv4(),
                 text: cleanText,
                 parent_document_id: parentDocumentId,
-                original_content: markdownContent, // Store the full original markdown
             };
-        }).filter(chunk => chunk !== null) as Array<{ id: string, text: string, parent_document_id: string, original_content: string }>;
+    }).filter(chunk => chunk !== null) as Array<{ id: string, text: string, parent_document_id: string }>;
     }
 
     public async addDocument(documentId: string, markdownContent: string): Promise<void> {
         if (!this.chromaCollection) {
             throw new Error("ChromaDB collection is not initialized.");
         }
+
+    // Store the full document content using ParentDocumentService
+    await parentDocumentService.storeDocument(documentId, markdownContent);
 
         const chunks = this.chunkMarkdown(markdownContent, documentId);
         if (chunks.length === 0) {
@@ -91,7 +96,7 @@ export class RAGService {
 
         const ids: string[] = [];
         const embeddings: number[][] = [];
-        const metadatas: Array<{ text_chunk: string, parent_document_id: string, original_content: string }> = [];
+    const metadatas: Array<{ text_chunk: string, parent_document_id: string }> = [];
 
         for (const chunk of chunks) {
             ids.push(chunk.id);
@@ -110,7 +115,6 @@ export class RAGService {
             metadatas.push({
                 text_chunk: chunk.text, // Storing the cleaned chunk text
                 parent_document_id: chunk.parent_document_id,
-                original_content: chunk.original_content, // Storing the full original markdown
             });
         }
 
@@ -161,41 +165,22 @@ export class RAGService {
         }
     }
 
-    public async getParentDocumentContent(documentId: string): Promise<string | null> {
-        if (!this.chromaCollection) {
-            throw new Error("ChromaDB collection is not initialized.");
-        }
-        try {
-            // We only need to retrieve one chunk for the documentId to get the original_content
-            const results = await this.chromaCollection.get({
-                where: { "parent_document_id": documentId },
-                limit: 1, 
-                include: ["metadatas"] 
-            });
-
-            if (results.ids && results.ids.length > 0 && results.metadatas && results.metadatas.length > 0) {
-                const firstChunkMetadata = results.metadatas[0] as { original_content?: string };
-                if (firstChunkMetadata && typeof firstChunkMetadata.original_content === 'string') {
-                    console.info(`Retrieved parent document content for ID: ${documentId}`);
-                    return firstChunkMetadata.original_content;
-                }
-            }
-            console.warn(`No original content found for parent document ID: ${documentId}. It might not exist or its chunks are missing original_content metadata.`);
-            return null;
-        } catch (error) {
-            console.error(`Error retrieving parent document content for ID ${documentId}:`, error);
-            throw error;
-        }
-    }
+    // getParentDocumentContent is removed as ParentDocumentService will handle fetching full documents.
 
     public async updateDocument(documentId: string, newMarkdownContent: string): Promise<void> {
         console.info(`Attempting to update document ID: ${documentId}`);
-        await this.deleteDocument(documentId); // Wait for deletion to complete
-        await this.addDocument(documentId, newMarkdownContent); // Wait for addition to complete
+        // Store the updated full document content
+        await parentDocumentService.storeDocument(documentId, newMarkdownContent);
+        // Delete existing chunks from ChromaDB
+        await this.deleteDocumentChunks(documentId); // Renamed for clarity, was deleteDocument
+        // Add new chunks for the updated content
+        await this.addDocument(documentId, newMarkdownContent); // This will re-chunk and add to Chroma
         console.info(`Successfully updated document ID: ${documentId}`);
     }
 
-    public async deleteDocument(documentId: string): Promise<void> {
+    // Renamed from deleteDocument to deleteDocumentChunks for clarity,
+    // as ParentDocumentService.deleteDocument will delete the main document.
+    public async deleteDocumentChunks(documentId: string): Promise<void> {
         if (!this.chromaCollection) {
             throw new Error("ChromaDB collection is not initialized.");
         }
@@ -210,14 +195,27 @@ export class RAGService {
 
             if (chunkIdsToDelete && chunkIdsToDelete.length > 0) {
                 await this.chromaCollection.delete({ ids: chunkIdsToDelete });
-                console.info(`Deleted ${chunkIdsToDelete.length} chunks for document ID: ${documentId}`);
+                console.info(`Deleted ${chunkIdsToDelete.length} chunks for document ID: ${documentId} from ChromaDB.`);
             } else {
-                console.info(`No chunks found to delete for document ID: ${documentId}`);
+                console.info(`No chunks found in ChromaDB to delete for document ID: ${documentId}`);
             }
         } catch (error) {
-            console.error(`Error deleting document ID ${documentId} from ChromaDB:`, error);
+            console.error(`Error deleting chunks for document ID ${documentId} from ChromaDB:`, error);
             throw error;
         }
+    }
+
+    // This method now also needs to ensure ParentDocumentService deletes the main document.
+    public async deleteDocumentAndChunks(documentId: string): Promise<void> {
+        console.info(`Attempting to delete document and its chunks for ID: ${documentId}`);
+        await this.deleteDocumentChunks(documentId); // Delete chunks from ChromaDB
+        const deletedFromMongo = await parentDocumentService.deleteDocument(documentId); // Delete from MongoDB
+        if (deletedFromMongo) {
+            console.info(`Successfully deleted parent document ID: ${documentId} from MongoDB.`);
+        } else {
+            console.warn(`Parent document ID: ${documentId} not found in MongoDB or already deleted.`);
+        }
+        console.info(`Completed deletion process for document ID: ${documentId}.`);
     }
 
     public async queryChunks(queryText: string, n_results: number = 5): Promise<Array<any>> {
