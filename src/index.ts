@@ -10,7 +10,7 @@ import { config } from './config';
 // import { geminiRouter } from './routers/gemini'; // Removed
 // import { openaiRouter } from './routers/openai'; // Removed
 import { ragManagementRouter } from './routers/ragManagement';
-import { geminiRouter } from './routers/ragQuery';
+import { geminiRouter } from './routers/geminiQuery';
 import swaggerDocument from './swagger';
 
 const app = express();

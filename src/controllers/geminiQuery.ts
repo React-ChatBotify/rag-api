@@ -9,19 +9,9 @@ import {
     LLMStreamChunk,
 } from '../types';
 
-const extractModelName = (paramModel: string, suffix: string): string => {
-    if (paramModel.endsWith(suffix)) {
-        return paramModel.substring(0, paramModel.length - suffix.length);
-    }
-    // Fallback if the suffix is somehow not there or model name is unusual.
-    // This might indicate an issue with routing or request format.
-    console.warn(`Model parameter "${paramModel}" did not have expected suffix "${suffix}". Using full parameter as model name.`);
-    return paramModel;
-}
 
 export const handleGeminiBatch = async (req: Request, res: Response) => {
-    const paramModel = req.params.model;
-    const model = extractModelName(paramModel, ":generateContent");
+    const model = req.params.model;
 
     try {
         const { query, n_results, rag_type: raw_rag_type } = req.body;
@@ -107,8 +97,7 @@ export const handleGeminiBatch = async (req: Request, res: Response) => {
 };
 
 export const handleGeminiStream = async (req: Request, res: Response) => {
-    const paramModel = req.params.model;
-    const model = extractModelName(paramModel, ":streamGenerateContent");
+    const model = req.params.model;
 
     try {
         const { query, n_results, rag_type: raw_rag_type } = req.body;

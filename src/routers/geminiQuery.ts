@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { handleGeminiBatch, handleGeminiStream } from '../controllers/ragQuery';
+import { handleGeminiBatch, handleGeminiStream } from '../controllers/geminiQuery';
 
 const geminiRouter = Router();
 

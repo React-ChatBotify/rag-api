@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { handleGeminiBatch, handleGeminiStream } from '../ragQuery'; // Updated imports
+import { handleGeminiBatch, handleGeminiStream } from '../geminiQuery'; // Updated imports
 import { initializedRagService } from '../../services/ragService';
 import { generateText } from '../../services/llmWrapper';
 import { GeminiChatCompletionResponse, GeminiStreamChunk } from '../../types';
