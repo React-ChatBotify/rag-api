@@ -22,5 +22,14 @@ services:
     env_file:
       - ../config/env/.env.development
 
+  mongodb:
+    image: mongo:6
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    env_file:
+      - ../config/env/.env.development
+
 volumes:
   chroma-data:
+  mongo-data:

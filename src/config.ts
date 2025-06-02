@@ -20,8 +20,8 @@ export const config = {
 	chromaPort: process.env.CHROMA_PORT || '8000',
 
 	// MongoDB
-	MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017',
-	MONGODB_DATABASE_NAME: process.env.MONGODB_DATABASE_NAME || 'rag_parent_documents',
+	MONGODB_DATABASE_NAME: process.env.MONGO_INITDB_DATABASE || 'rcb-rag-api',
+	MONGODB_URI: `mongodb://${process.env.MONGO_INITDB_ROOT_USERNAME}:${process.env.MONGO_INITDB_ROOT_PASSWORD}@mongodb:${process.env.MONGO_INITDB_PORT}/${process.env.MONGO_INITDB_DATABASE}`,
 	chromaTenant: process.env.CHROMA_TENANT || 'default_tenant',
 	chromaDatabase: process.env.CHROMA_DATABASE || 'default_database',
 	chromaAuthToken: process.env.CHROMA_AUTH_TOKEN,
