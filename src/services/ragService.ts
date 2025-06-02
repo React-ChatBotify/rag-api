@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Buffer } from 'buffer'; // Added for Basic Auth
 import { config } from '../config';
 import { generateEmbeddings } from '../services/llmWrapper'; // Added
+import { mongoService } from './mongoService'; // Corrected import
 
 // EmbeddingGenerator class removed
 
@@ -20,10 +21,8 @@ export class RAGService {
 
         if (config.chromaAuthToken) {
             headers['Authorization'] = `Bearer ${config.chromaAuthToken}`;
-        } else if (config.chromaUsername && config.chromaPassword) {
-            const basicAuth = Buffer.from(`${config.chromaUsername}:${config.chromaPassword}`).toString('base64');
-            headers['Authorization'] = `Basic ${basicAuth}`;
         }
+        // Removed chromaUsername/Password block as it's not in config
 
         if (config.chromaTenant && config.chromaTenant !== 'default_tenant') {
            headers['X-Chroma-Tenant'] = config.chromaTenant;
@@ -59,12 +58,12 @@ export class RAGService {
     }
 
     // More methods will be added here
-    public chunkMarkdown(markdownContent: string, parentDocumentId: string): Array<{ id: string, text: string, parent_document_id: string, original_content: string }> {
-        const htmlContent = marked.parse(markdownContent);
+    public async chunkMarkdown(markdownContent: string, parentDocumentId: string): Promise<Array<{ id: string, text: string, parent_document_id: string }>> {
+        const htmlContent = await marked.parse(markdownContent); // Added await
         // A simple way to split by paragraphs; more sophisticated methods might be needed for complex HTML.
-        const paragraphs = htmlContent.split(/<\/?p>/).filter(p => p.trim() !== '');
+        const paragraphs = htmlContent.split(/<\/?p>/).filter((p: string) => p.trim() !== '');
 
-        return paragraphs.map(paragraphText => {
+        return paragraphs.map((paragraphText: string) => {
             const cleanText = paragraphText.replace(/<[^>]+>/g, '').trim(); // Remove any remaining HTML tags and trim
             if (cleanText.length === 0) {
                 return null; // Skip empty paragraphs
@@ -73,9 +72,9 @@ export class RAGService {
                 id: uuidv4(),
                 text: cleanText,
                 parent_document_id: parentDocumentId,
-                original_content: markdownContent, // Store the full original markdown
             };
-        }).filter(chunk => chunk !== null) as Array<{ id: string, text: string, parent_document_id: string, original_content: string }>;
+        }).filter(chunk => chunk !== null) as Array<{ id: string, text: string, parent_document_id: string }>;
+        // Type assertion for filter(chunk => chunk !== null) is okay here as we explicitly return null or an object.
     }
 
     public async addDocument(documentId: string, markdownContent: string): Promise<void> {
@@ -83,7 +82,10 @@ export class RAGService {
             throw new Error("ChromaDB collection is not initialized.");
         }
 
-        const chunks = this.chunkMarkdown(markdownContent, documentId);
+        // Save the parent document to MongoDB
+        await mongoService.saveDocument(documentId, markdownContent);
+
+        const chunks = await this.chunkMarkdown(markdownContent, documentId); // Added await
         if (chunks.length === 0) {
             console.warn(`No chunks generated for document ID: ${documentId}. Nothing to add.`);
             return;
@@ -91,26 +93,25 @@ export class RAGService {
 
         const ids: string[] = [];
         const embeddings: number[][] = [];
-        const metadatas: Array<{ text_chunk: string, parent_document_id: string, original_content: string }> = [];
+        const metadatas: Array<{ text_chunk: string, parent_document_id: string }> = [];
 
         for (const chunk of chunks) {
             ids.push(chunk.id);
             // const embedding = await this.embeddingGenerator.generate(chunk.text); // Old
             const embeddingResponse = await generateEmbeddings({
-                provider: 'gemini', // Defaulting to gemini for RAG embeddings
+                // provider: 'gemini', // Removed as per TS error
                 text: chunk.text,
             });
-            if (!embeddingResponse || !embeddingResponse.embeddings || embeddingResponse.embeddings.length === 0 || !embeddingResponse.embeddings[0].embedding) {
-                console.error(`Failed to generate embedding for chunk ID: ${chunk.id} with provider 'gemini'. Skipping.`);
+            if (!embeddingResponse || !embeddingResponse.embeddings || embeddingResponse.embeddings.length === 0 || !embeddingResponse.embeddings[0].values) { // Changed .embedding to .values
+                console.error(`Failed to generate embedding for chunk ID: ${chunk.id}. Skipping.`); // Removed provider from log
                 // Potentially skip this chunk or throw an error to halt the process
                 continue;
             }
-            const embedding = embeddingResponse.embeddings[0].embedding;
+            const embedding = embeddingResponse.embeddings[0].values; // Changed .embedding to .values
             embeddings.push(embedding);
             metadatas.push({
                 text_chunk: chunk.text, // Storing the cleaned chunk text
-                parent_document_id: chunk.parent_document_id,
-                original_content: chunk.original_content, // Storing the full original markdown
+                parent_document_id: chunk.parent_document_id, // This is correctly set to documentId by chunkMarkdown
             });
         }
 
@@ -162,36 +163,42 @@ export class RAGService {
     }
 
     public async getParentDocumentContent(documentId: string): Promise<string | null> {
-        if (!this.chromaCollection) {
-            throw new Error("ChromaDB collection is not initialized.");
-        }
         try {
-            // We only need to retrieve one chunk for the documentId to get the original_content
-            const results = await this.chromaCollection.get({
-                where: { "parent_document_id": documentId },
-                limit: 1, 
-                include: ["metadatas"] 
-            });
-
-            if (results.ids && results.ids.length > 0 && results.metadatas && results.metadatas.length > 0) {
-                const firstChunkMetadata = results.metadatas[0] as { original_content?: string };
-                if (firstChunkMetadata && typeof firstChunkMetadata.original_content === 'string') {
-                    console.info(`Retrieved parent document content for ID: ${documentId}`);
-                    return firstChunkMetadata.original_content;
-                }
+            const parentDocument = await mongoService.getDocument(documentId);
+            if (parentDocument) {
+                console.info(`Retrieved parent document content for ID: ${documentId} from MongoDB`);
+                return parentDocument.content;
+            } else {
+                console.warn(`Parent document ID: ${documentId} not found in MongoDB.`);
+                return null;
             }
-            console.warn(`No original content found for parent document ID: ${documentId}. It might not exist or its chunks are missing original_content metadata.`);
-            return null;
         } catch (error) {
-            console.error(`Error retrieving parent document content for ID ${documentId}:`, error);
-            throw error;
+            console.error(`Error retrieving parent document content for ID ${documentId} from MongoDB:`, error);
+            throw error; // Or handle more gracefully, e.g., return null
         }
     }
 
     public async updateDocument(documentId: string, newMarkdownContent: string): Promise<void> {
         console.info(`Attempting to update document ID: ${documentId}`);
-        await this.deleteDocument(documentId); // Wait for deletion to complete
-        await this.addDocument(documentId, newMarkdownContent); // Wait for addition to complete
+
+        // Step 1: Delete old chunks from ChromaDB
+        if (!this.chromaCollection) {
+            throw new Error("ChromaDB collection is not initialized.");
+        }
+        const results = await this.chromaCollection.get({
+            where: { "parent_document_id": documentId },
+            include: [] // We only need IDs
+        });
+        const chunkIdsToDelete = results.ids;
+        if (chunkIdsToDelete && chunkIdsToDelete.length > 0) {
+            await this.chromaCollection.delete({ ids: chunkIdsToDelete });
+            console.info(`Deleted ${chunkIdsToDelete.length} old chunks for document ID: ${documentId} as part of update.`);
+        } else {
+            console.info(`No old chunks found to delete for document ID: ${documentId} during update.`);
+        }
+
+        // Step 2: Add the new document version (which saves to Mongo and adds new chunks to Chroma)
+        await this.addDocument(documentId, newMarkdownContent);
         console.info(`Successfully updated document ID: ${documentId}`);
     }
 
@@ -210,13 +217,18 @@ export class RAGService {
 
             if (chunkIdsToDelete && chunkIdsToDelete.length > 0) {
                 await this.chromaCollection.delete({ ids: chunkIdsToDelete });
-                console.info(`Deleted ${chunkIdsToDelete.length} chunks for document ID: ${documentId}`);
+                console.info(`Deleted ${chunkIdsToDelete.length} chunks from ChromaDB for document ID: ${documentId}`);
             } else {
-                console.info(`No chunks found to delete for document ID: ${documentId}`);
+                console.info(`No chunks found in ChromaDB to delete for document ID: ${documentId}`);
             }
+
+            // Delete parent document from MongoDB
+            await mongoService.deleteDocument(documentId);
+            console.info(`Parent document ID: ${documentId} deleted from MongoDB.`);
+
         } catch (error) {
-            console.error(`Error deleting document ID ${documentId} from ChromaDB:`, error);
-            throw error;
+            console.error(`Error deleting document ID ${documentId} from stores:`, error);
+            throw error; // Re-throw to allow controller to handle
         }
     }
 
@@ -227,14 +239,14 @@ export class RAGService {
         try {
             // const queryEmbedding = await this.embeddingGenerator.generate(queryText); // Old
             const embeddingResponse = await generateEmbeddings({
-                provider: 'gemini', // Defaulting to gemini for RAG query embeddings
+                // provider: 'gemini', // Removed as per TS error
                 text: queryText,
             });
-            if (!embeddingResponse || !embeddingResponse.embeddings || embeddingResponse.embeddings.length === 0) {
-                console.error(`Failed to generate query embedding for text: "${queryText}" with provider 'gemini'.`);
+            if (!embeddingResponse || !embeddingResponse.embeddings || embeddingResponse.embeddings.length === 0 || !embeddingResponse.embeddings[0].values) { // Changed to check .values
+                console.error(`Failed to generate query embedding for text: "${queryText}".`); // Removed provider from log
                 throw new Error('Failed to generate query embedding.');
             }
-            const queryEmbedding = embeddingResponse.embeddings[0].values;
+            const queryEmbedding = embeddingResponse.embeddings[0].values; // Assuming .values is correct
             const results = await this.chromaCollection.query({
                 queryEmbeddings: [queryEmbedding],
                 nResults: n_results,
@@ -266,8 +278,12 @@ export class RAGService {
 }
 
 // Export a promise that resolves when the service is initialized
+// Ensure mongoService is connected before RAGService is considered initialized.
 const ragServiceInstance = new RAGService();
-export const initializedRagService = ragServiceInstance.init().then(() => ragServiceInstance).catch(err => {
-    console.error("Failed to initialize RAGService:", err);
-    process.exit(1); // Or handle more gracefully
-});
+export const initializedRagService = mongoService.connect()
+    .then(() => ragServiceInstance.init())
+    .then(() => ragServiceInstance)
+    .catch(err => {
+        console.error("Failed to initialize RAGService or connect to MongoDB:", err);
+        process.exit(1); // Or handle more gracefully
+    });
