@@ -21,7 +21,7 @@ export const config = {
 
 	// MongoDB
 	MONGODB_DATABASE_NAME: process.env.MONGO_INITDB_DATABASE || 'rcb-rag-api',
-	MONGODB_URI: `mongodb://${process.env.MONGO_INITDB_ROOT_USERNAME}:${process.env.MONGO_INITDB_ROOT_PASSWORD}@mongodb:${process.env.MONGO_INITDB_PORT}/${process.env.MONGO_INITDB_DATABASE}`,
+	MONGODB_URI: `mongodb://${process.env.MONGO_INITDB_ROOT_USERNAME}:${process.env.MONGO_INITDB_ROOT_PASSWORD}@mongodb:${process.env.MONGO_INITDB_PORT}/${process.env.MONGO_INITDB_DATABASE}?authSource=admin`,
 	chromaTenant: process.env.CHROMA_TENANT || 'default_tenant',
 	chromaDatabase: process.env.CHROMA_DATABASE || 'default_database',
 	chromaAuthToken: process.env.CHROMA_AUTH_TOKEN,
