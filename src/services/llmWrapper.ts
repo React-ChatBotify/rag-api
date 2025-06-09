@@ -42,10 +42,11 @@ export const generateText = async (
       if (!onChunk) {
         throw new Error('onChunk callback is required for streaming responses.');
       }
-      await streamGeminiGenerate(geminiModelId as GeminiModelName, geminiContents, (chunk: GeminiStreamChunk) => {
-        // LLMStreamChunk is now GeminiStreamChunk, so direct pass is fine.
-        onChunk(chunk as LLMStreamChunk);
-      });
+      // gemini.ts's streamGenerateContent now expects an onChunk that takes a raw JSON string.
+      // The onChunk from LLMChatRequestOptions (options.onChunk) will also expect a raw JSON string
+      // (this will be updated in a subsequent step in the types.ts file).
+      // Therefore, we can pass it directly.
+      await streamGeminiGenerate(geminiModelId as GeminiModelName, geminiContents, onChunk);
       return;
     } else {
       const response = await batchGeminiGenerate(geminiModelId as GeminiModelName, geminiContents);

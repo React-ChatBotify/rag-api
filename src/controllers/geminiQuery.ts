@@ -212,8 +212,9 @@ export const handleGeminiStream = async (req: Request, res: Response) => {
     try {
       await generateText({
         model: model,
-        onChunk: (chunk: LLMStreamChunk) => {
-          res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        // The onChunk callback now receives a raw JSON string from llmWrapper.ts
+        onChunk: (rawJsonData: string) => {
+          res.write(`data: ${rawJsonData}\n\n`);
         },
         query: augmentedPrompt,
         stream: true,
