@@ -1,10 +1,11 @@
-import { MongoClient, Collection } from 'mongodb';
+import { Collection, MongoClient } from 'mongodb';
+
 import { config } from '../config';
 
-export interface ParentDocument {
+export type ParentDocument = {
   _id: string;
   content: string;
-}
+};
 
 class MongoService {
   private client: MongoClient;
@@ -30,11 +31,7 @@ class MongoService {
 
   async saveDocument(documentId: string, content: string): Promise<void> {
     const collection = await this.getParentDocumentCollection();
-    await collection.updateOne(
-      { _id: documentId },
-      { $set: { content: content, _id: documentId } },
-      { upsert: true }
-    );
+    await collection.updateOne({ _id: documentId }, { $set: { _id: documentId, content: content } }, { upsert: true });
   }
 
   async getDocument(documentId: string): Promise<ParentDocument | null> {

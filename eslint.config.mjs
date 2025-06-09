@@ -31,10 +31,6 @@ export default [
       "@typescript-eslint/no-unused-vars": "error",
       "@typescript-eslint/consistent-type-definitions": ["error", "type"],
 
-      // Code style rules
-      indent: ["error", "tab"],
-      "max-len": ["error", { code: 120 }],
-
       // Import/export sorting
       "simple-import-sort/imports": "warn",
       "simple-import-sort/exports": "warn",

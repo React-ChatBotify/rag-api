@@ -7,9 +7,9 @@ const mockDeleteOne = jest.fn();
 
 // 2. Define mock functions that return other mocks (composing them).
 const mockCollection = jest.fn(() => ({
-  updateOne: mockUpdateOne,
-  findOne: mockFindOne,
   deleteOne: mockDeleteOne,
+  findOne: mockFindOne,
+  updateOne: mockUpdateOne,
 }));
 const mockDb = jest.fn(() => ({
   collection: mockCollection,
@@ -19,17 +19,17 @@ const mockDb = jest.fn(() => ({
 const mockMongoClientConstructor = jest.fn((uri) => {
   console.log('[Mock CONSTRUCTOR] MongoClient called with URI:', uri);
   return {
+    close: mockClose,
     connect: mockConnect,
     db: mockDb,
-    close: mockClose,
   };
 });
 
 // 4. Use jest.doMock for non-hoisted mocking, before imports.
 jest.doMock('mongodb', () => ({
-  MongoClient: mockMongoClientConstructor,
-  Db: jest.fn(),
   Collection: jest.fn(),
+  Db: jest.fn(),
+  MongoClient: mockMongoClientConstructor,
 }));
 
 // 5. NOW, require modules that will use the mocked 'mongodb'.
@@ -42,7 +42,6 @@ const mongoService = mongoServiceModule.mongoService;
 const ImportedMockClient = mongoDbModule.MongoClient; // This is our mock constructor
 const config = configModule.config;
 import type { ParentDocument } from '../mongoService';
-
 
 describe('MongoService', () => {
   // No need to declare mongoService here, we will use the imported singleton instance.
@@ -59,7 +58,6 @@ describe('MongoService', () => {
     mockDeleteOne.mockClear();
 
     mockFindOne.mockReset(); // Specifically reset findOne that has mockResolvedValueOnce
-
 
     // Create a new instance of MongoService before each test. NO! Use the imported singleton.
     // This ensures that any instance-specific state is reset.
@@ -120,7 +118,7 @@ describe('MongoService', () => {
       expect(mongoService.getParentDocumentCollection).toHaveBeenCalledTimes(1);
       expect(mockUpdateOne).toHaveBeenCalledWith(
         { _id: documentId },
-        { $set: { content: content, _id: documentId } },
+        { $set: { _id: documentId, content: content } },
         { upsert: true }
       );
     });
@@ -132,7 +130,6 @@ describe('MongoService', () => {
       const mockDoc: ParentDocument = { _id: documentId, content: 'Test Content' };
       mockFindOne.mockResolvedValueOnce(mockDoc);
       jest.spyOn(mongoService, 'getParentDocumentCollection').mockResolvedValueOnce(mockCollection() as any);
-
 
       const result = await mongoService.getDocument(documentId);
 

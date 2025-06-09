@@ -1,10 +1,6 @@
 import { Router } from 'express';
-import {
-    createDocument,
-    getDocument,
-    updateDocument,
-    deleteDocument,
-} from '../controllers/ragManagement';
+
+import { createDocument, deleteDocument, getDocument, updateDocument } from '../controllers/ragManagement';
 import { apiKeyAuth } from '../middleware/auth';
 
 const ragManagementRouter = Router();
