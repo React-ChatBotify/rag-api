@@ -14,7 +14,26 @@ const app = express();
 
 const API_PREFIX = `/api/${process.env.API_VERSION || 'v1'}`;
 app.use(bodyParser.json());
-app.use(cors());
+const allowedOrigins = process.env.FRONTEND_WEBSITE_URLS?.split(',').map((origin) => origin.trim()) || [];
+// handle cors with a dynamic origin function
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // allow requests with no origin (like mobile apps, curl requests)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins?.indexOf(origin) !== -1) {
+        // if the origin is found in the allowedOrigins array, allow it
+        return callback(null, true);
+      } else {
+        // if the origin is not found in the allowedOrigins array, block it
+        console.info(`Allowed origins: ${allowedOrigins}`);
+        return callback(new Error(`Not allowed by CORS: ${origin}`));
+      }
+    },
+    credentials: true,
+  })
+);
 app.use(`${API_PREFIX}/rag/manage`, ragManagementRouter);
 app.use(`${API_PREFIX}/`, geminiRouter);
 
