@@ -40,7 +40,7 @@ jobs:
     needs: lint
     name: Publish & Deploy
     if: ${{ inputs.skip_deploy == false }}
-    uses: ./.github/workflows/publish.yml
+    uses: ./.github/workflows/publish-and-deploy.yml
     secrets: inherit
     with:
       target_env: ${{ inputs.target_env }}
