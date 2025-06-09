@@ -3,9 +3,6 @@ services:
     container_name: rag-api
     ports:
       - "${PORT:-8080}:8080"
-    volumes:
-      - ..:/app
-      - /app/node_modules
     depends_on:
       - chromadb
     env_file:
