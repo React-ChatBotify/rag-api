@@ -8,6 +8,7 @@ export const config = {
 
   MONGODB_URI: `mongodb://${process.env.MONGO_INITDB_ROOT_USERNAME}:${process.env.MONGO_INITDB_ROOT_PASSWORD}@mongodb:${process.env.MONGO_INITDB_PORT}/${process.env.MONGO_INITDB_DATABASE}?authSource=admin`,
 
+  // ChromaDB Configuration
   chromaAuthToken: process.env.CHROMA_AUTH_TOKEN,
 
   chromaDatabase: process.env.CHROMA_DATABASE || 'default_database',
@@ -16,23 +17,26 @@ export const config = {
 
   chromaTenant: process.env.CHROMA_TENANT || 'default_tenant',
 
-  // ChromaDB Configuration
   chromaUrl: process.env.CHROMA_URL || 'chromadb',
 
+  // Gemini Configuration
   geminiApiKey: process.env.GEMINI_API_KEY!,
 
-  // Gemini Configuration
   geminiBaseUrl: process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta',
 
   geminiChatModel: process.env.GEMINI_CHAT_MODEL || 'gemini-2.0-flash-lite',
 
   geminiEmbeddingModel: process.env.GEMINI_EMBEDDING_MODEL || 'text-embedding-004',
 
+  geminiNResults: parseInt(process.env.GEMINI_N_RESULTS || '3', 10),
+
+  geminiRagType: process.env.GEMINI_RAG_TYPE || 'basic',
+
   // Server Configuration
   port: process.env.PORT || 8080,
 
   // RAG Management API Key (protects management endpoints)
-  ragApiKey: process.env.RAG_MANAGEMENT_API_KEY!,
+  ragManagementApiKey: process.env.RAG_MANAGEMENT_API_KEY!,
 
   ragQueryApiKey: process.env.RAG_QUERY_API_KEY!,
 };

@@ -81,3 +81,7 @@ export type GeminiChatPayload = {
 
 // This will be GeminiChatCompletionResponse itself, as Gemini streams full response objects.
 export type GeminiStreamChunk = GeminiChatCompletionResponse;
+
+export type GeminiQueryRequest = {
+  contents: GeminiContent[];
+};

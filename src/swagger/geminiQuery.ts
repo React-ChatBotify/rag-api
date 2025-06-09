@@ -6,6 +6,8 @@ const geminiQueryPaths = {
   [`/api/${API_VERSION}/gemini/models/{model}:generateContent`]: {
     post: {
       summary: 'Gemini batch generation (non‐streaming)',
+      description:
+        'Generates content from the specified Gemini model in a non-streaming (batch) manner. RAG parameters `n_results` and `rag_type` are now configured via server-side environment variables (`GEMINI_N_RESULTS` and `GEMINI_RAG_TYPE`) and are not accepted in the request body.',
       tags: ['Gemini Query'],
       security: [
         {
@@ -30,27 +32,46 @@ const geminiQueryPaths = {
           'application/json': {
             schema: {
               type: 'object',
+              required: ['contents'],
               properties: {
-                query: {
-                  type: 'string',
-                  description: "User's query text.",
-                  example: 'What is the capital of France?',
-                },
-                n_results: {
-                  type: 'integer',
-                  description: 'Optional: Number of RAG chunks to retrieve. Defaults to 3.',
-                  example: 5,
-                },
-                rag_type: {
-                  type: 'string',
-                  description:
-                    'Optional: ‘basic’ (default) or ‘advanced’. Determines whether to use text chunks or full parent content for context.',
-                  enum: ['basic', 'advanced'],
-                  default: 'basic',
-                  example: 'advanced',
+                contents: {
+                  type: 'array',
+                  description: "An array of content parts, typically a single 'user' role content part for a query.",
+                  items: {
+                    type: 'object',
+                    required: ['parts'],
+                    properties: {
+                      parts: {
+                        type: 'array',
+                        description: 'An array of parts that make up the content. Typically a single text part.',
+                        items: {
+                          type: 'object',
+                          required: ['text'],
+                          properties: {
+                            text: {
+                              type: 'string',
+                              description: "The user's query text.",
+                              example: 'What is the capital of France?',
+                            },
+                          },
+                        },
+                      },
+                      role: {
+                        type: 'string',
+                        description: "The role of the content provider. Typically 'user'.",
+                        example: 'user',
+                        enum: ['user', 'model'],
+                      },
+                    },
+                  },
+                  example: [
+                    {
+                      parts: [{ text: 'Hello Gemini!' }],
+                      role: 'user',
+                    },
+                  ],
                 },
               },
-              required: ['query'],
             },
           },
         },
@@ -102,7 +123,7 @@ const geminiQueryPaths = {
           },
         },
         '400': {
-          description: 'Bad Request – e.g. missing or invalid `query` or `rag_type` not in [basic, advanced].',
+          description: 'Bad Request – e.g. missing or invalid `contents` structure.',
         },
         '500': { description: 'Internal Server Error' },
         '503': {
@@ -115,6 +136,8 @@ const geminiQueryPaths = {
   [`/api/${API_VERSION}/gemini/models/{model}:streamGenerateContent`]: {
     post: {
       summary: 'Gemini streaming generation (SSE)',
+      description:
+        'Generates content from the specified Gemini model using Server-Sent Events (SSE) for streaming. RAG parameters `n_results` and `rag_type` are now configured via server-side environment variables (`GEMINI_N_RESULTS` and `GEMINI_RAG_TYPE`) and are not accepted in the request body.',
       tags: ['Gemini Query'],
       security: [
         {
@@ -139,26 +162,46 @@ const geminiQueryPaths = {
           'application/json': {
             schema: {
               type: 'object',
+              required: ['contents'],
               properties: {
-                query: {
-                  type: 'string',
-                  description: "User's query text.",
-                  example: 'Provide a summary of document Y.',
-                },
-                n_results: {
-                  type: 'integer',
-                  description: 'Optional: Number of RAG chunks to retrieve. Defaults to 3.',
-                  example: 3,
-                },
-                rag_type: {
-                  type: 'string',
-                  description: 'Optional: ‘basic’ (default) or ‘advanced’. Defaults to ‘basic’.',
-                  enum: ['basic', 'advanced'],
-                  default: 'basic',
-                  example: 'basic',
+                contents: {
+                  type: 'array',
+                  description: "An array of content parts, typically a single 'user' role content part for a query.",
+                  items: {
+                    type: 'object',
+                    required: ['parts'],
+                    properties: {
+                      parts: {
+                        type: 'array',
+                        description: 'An array of parts that make up the content. Typically a single text part.',
+                        items: {
+                          type: 'object',
+                          required: ['text'],
+                          properties: {
+                            text: {
+                              type: 'string',
+                              description: "The user's query text.",
+                              example: 'Provide a summary of document Y.',
+                            },
+                          },
+                        },
+                      },
+                      role: {
+                        type: 'string',
+                        description: "The role of the content provider. Typically 'user'.",
+                        example: 'user',
+                        enum: ['user', 'model'],
+                      },
+                    },
+                  },
+                  example: [
+                    {
+                      parts: [{ text: 'Summarize this for me.' }],
+                      role: 'user',
+                    },
+                  ],
                 },
               },
-              required: ['query'],
             },
           },
         },
@@ -180,7 +223,7 @@ const geminiQueryPaths = {
           },
         },
         '400': {
-          description: 'Bad Request – e.g. missing `query` or invalid `rag_type`.',
+          description: 'Bad Request – e.g. missing or invalid `contents` structure.',
         },
         '500': { description: 'Internal Server Error' },
         '503': {

@@ -1,39 +1,52 @@
 import { Request, Response } from 'express';
 
+import { config } from '../config';
 import { generateText } from '../services/llmWrapper';
 import { initializedRagService } from '../services/ragService';
-import { LLMChatResponse, LLMStreamChunk } from '../types';
+import { GeminiQueryRequest, LLMChatResponse, LLMStreamChunk } from '../types';
 
 export const handleGeminiBatch = async (req: Request, res: Response) => {
   const model = req.params.model;
+  let userQuery = ''; // Define userQuery here to be accessible in the catch block
 
   try {
-    const { query, n_results, rag_type: raw_rag_type } = req.body;
+    const { contents } = req.body as GeminiQueryRequest;
 
-    if (!query || typeof query !== 'string' || query.trim() === '') {
-      return res.status(400).json({ error: 'Bad Request: query is required and must be a non-empty string.' });
+    // Validate contents structure
+    if (
+      !contents ||
+      !Array.isArray(contents) ||
+      contents.length === 0 ||
+      !contents[0].parts ||
+      !Array.isArray(contents[0].parts) ||
+      contents[0].parts.length === 0 ||
+      !contents[0].parts[0].text ||
+      typeof contents[0].parts[0].text !== 'string' ||
+      contents[0].parts[0].text.trim() === ''
+    ) {
+      return res.status(400).json({
+        error:
+          'Bad Request: contents is required and must be an array with at least one part containing a non-empty text string.',
+      });
     }
+    userQuery = contents[0].parts[0].text; // Assign userQuery after validation
 
-    let rag_type = 'basic'; // Default rag_type to 'basic'
-    if (raw_rag_type !== undefined) {
-      if (raw_rag_type === 'basic' || raw_rag_type === 'advanced') {
-        rag_type = raw_rag_type;
-      } else {
-        return res.status(400).json({ error: "Bad Request: rag_type must be 'basic' or 'advanced'." });
-      }
-    }
+    const rag_type = config.geminiRagType;
+    const numberOfResults = config.geminiNResults;
 
-    const numberOfResults = typeof n_results === 'number' && n_results > 0 ? n_results : 3;
+    console.log(
+      `INFO: Gemini Batch Request. Model: ${model}. RAG Type (from config): ${rag_type}. N Results (from config): ${numberOfResults}.`
+    );
 
     const ragService = await initializedRagService;
-    const chunks = await ragService.queryChunks(query, numberOfResults);
+    const chunks = await ragService.queryChunks(userQuery, numberOfResults);
 
     let augmentedPrompt: string;
     if (!chunks || chunks.length === 0) {
       console.warn(
-        `No relevant chunks found for query: "${query}" with model ${model}. Querying LLM directly without RAG context.`
+        `No relevant chunks found for query: "${userQuery}" with model ${model}. Querying LLM directly without RAG context.`
       );
-      augmentedPrompt = query;
+      augmentedPrompt = userQuery;
     } else {
       let contextContent: string[] = [];
       if (rag_type === 'advanced') {
@@ -59,18 +72,18 @@ export const handleGeminiBatch = async (req: Request, res: Response) => {
 
       if (contextContent.length === 0) {
         console.warn(
-          `Chunks were found for query "${query}" (rag_type: ${rag_type}, model: ${model}), but no relevant content could be extracted. Querying LLM directly.`
+          `Chunks were found for query "${userQuery}" (RAG Type from config: ${rag_type}, model: ${model}), but no relevant content could be extracted. Querying LLM directly.`
         );
-        augmentedPrompt = query;
+        augmentedPrompt = userQuery;
       } else {
         const context = contextContent.join('\n---\n');
         const contextDescription =
           rag_type === 'advanced' ? 'Relevant Information from Parent Documents' : 'Relevant Text Chunks';
-        augmentedPrompt = `User Query: ${query}\n\n${contextDescription}:\n---\n${context}\n---\nBased on the relevant information above, answer the user query.`;
+        augmentedPrompt = `User Query: ${userQuery}\n\n${contextDescription}:\n---\n${context}\n---\nBased on the relevant information above, answer the user query.`;
       }
     }
 
-    console.log(`INFO: Gemini Batch Request. Model: ${model}. RAG Type: ${rag_type}.`);
+    // console.log(`INFO: Gemini Batch Request. Model: ${model}. RAG Type: ${rag_type}.`); // Already logged above with more details
 
     try {
       const llmResponse = (await generateText({
@@ -86,7 +99,7 @@ export const handleGeminiBatch = async (req: Request, res: Response) => {
         .json({ details: llmError.message, error: `Failed to get response from LLM provider Gemini.` });
     }
   } catch (error: any) {
-    console.error(`Error in handleGeminiBatch for model ${model}, query "${req.body.query}":`, error);
+    console.error(`Error in handleGeminiBatch for model ${model}, query "${userQuery}":`, error); // Use userQuery for logging
     if (error.message && error.message.includes('ChromaDB collection is not initialized')) {
       return res.status(503).json({ error: 'Service Unavailable: RAG service is not ready.' });
     }
@@ -99,43 +112,65 @@ export const handleGeminiBatch = async (req: Request, res: Response) => {
 
 export const handleGeminiStream = async (req: Request, res: Response) => {
   const model = req.params.model;
+  let userQuery = ''; // Define userQuery here to be accessible in the catch block
 
   try {
-    const { query, n_results, rag_type: raw_rag_type } = req.body;
-
-    if (!query || typeof query !== 'string' || query.trim() === '') {
-      // Cannot send JSON error if headers already sent, but here they are not.
-      return res.status(400).json({ error: 'Bad Request: query is required and must be a non-empty string.' });
-    }
+    const { contents } = req.body as GeminiQueryRequest;
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders(); // Send headers immediately
+    // res.flushHeaders(); // Flush headers after initial validation
 
-    let rag_type = 'basic'; // Default rag_type to 'basic'
-    if (raw_rag_type !== undefined) {
-      if (raw_rag_type === 'basic' || raw_rag_type === 'advanced') {
-        rag_type = raw_rag_type;
+    // Validate contents structure
+    if (
+      !contents ||
+      !Array.isArray(contents) ||
+      contents.length === 0 ||
+      !contents[0].parts ||
+      !Array.isArray(contents[0].parts) ||
+      contents[0].parts.length === 0 ||
+      !contents[0].parts[0].text ||
+      typeof contents[0].parts[0].text !== 'string' ||
+      contents[0].parts[0].text.trim() === ''
+    ) {
+      // If headers not sent, can send 400
+      if (!res.headersSent) {
+        return res.status(400).json({
+          error:
+            'Bad Request: contents is required and must be an array with at least one part containing a non-empty text string.',
+        });
       } else {
-        // Headers sent, so must write error to stream
-        res.write(`data: ${JSON.stringify({ error: "Bad Request: rag_type must be 'basic' or 'advanced'." })}\n\n`);
+        // Headers sent, write error to stream
+        res.write(
+          `data: ${JSON.stringify({
+            error:
+              'Bad Request: contents is required and must be an array with at least one part containing a non-empty text string.',
+          })}\n\n`
+        );
         res.end();
         return;
       }
     }
+    userQuery = contents[0].parts[0].text; // Assign userQuery after validation
+    res.flushHeaders(); // Send headers now that initial validation passed
 
-    const numberOfResults = typeof n_results === 'number' && n_results > 0 ? n_results : 3;
+    const rag_type = config.geminiRagType;
+    const numberOfResults = config.geminiNResults;
+
+    console.log(
+      `INFO: Gemini Stream Request. Model: ${model}. RAG Type (from config): ${rag_type}. N Results (from config): ${numberOfResults}.`
+    );
 
     const ragService = await initializedRagService;
-    const chunks = await ragService.queryChunks(query, numberOfResults);
+    const chunks = await ragService.queryChunks(userQuery, numberOfResults);
 
     let augmentedPrompt: string;
     if (!chunks || chunks.length === 0) {
       console.warn(
-        `No relevant chunks found for query: "${query}" with model ${model} (stream). Querying LLM directly without RAG context.`
+        `No relevant chunks found for query: "${userQuery}" with model ${model} (stream). Querying LLM directly without RAG context.`
       );
-      augmentedPrompt = query;
+      augmentedPrompt = userQuery;
     } else {
       let contextContent: string[] = [];
       if (rag_type === 'advanced') {
@@ -161,18 +196,18 @@ export const handleGeminiStream = async (req: Request, res: Response) => {
 
       if (contextContent.length === 0) {
         console.warn(
-          `Chunks were found for query "${query}" (rag_type: ${rag_type}, model: ${model}, stream), but no relevant content could be extracted. Querying LLM directly.`
+          `Chunks were found for query "${userQuery}" (RAG Type from config: ${rag_type}, model: ${model}, stream), but no relevant content could be extracted. Querying LLM directly.`
         );
-        augmentedPrompt = query;
+        augmentedPrompt = userQuery;
       } else {
         const context = contextContent.join('\n---\n');
         const contextDescription =
           rag_type === 'advanced' ? 'Relevant Information from Parent Documents' : 'Relevant Text Chunks';
-        augmentedPrompt = `User Query: ${query}\n\n${contextDescription}:\n---\n${context}\n---\nBased on the relevant information above, answer the user query.`;
+        augmentedPrompt = `User Query: ${userQuery}\n\n${contextDescription}:\n---\n${context}\n---\nBased on the relevant information above, answer the user query.`;
       }
     }
 
-    console.log(`INFO: Gemini Stream Request. Model: ${model}. RAG Type: ${rag_type}.`);
+    // console.log(`INFO: Gemini Stream Request. Model: ${model}. RAG Type: ${rag_type}.`); // Already logged above
 
     try {
       await generateText({
@@ -195,7 +230,7 @@ export const handleGeminiStream = async (req: Request, res: Response) => {
       }
     }
   } catch (error: any) {
-    console.error(`Error in handleGeminiStream for model ${model}, query "${req.body.query}":`, error);
+    console.error(`Error in handleGeminiStream for model ${model}, query "${userQuery}":`, error); // Use userQuery for logging
     if (!res.headersSent) {
       // This case should ideally not be reached if query validation is first.
       // However, for other early errors (like RAG service init), this is a fallback.
