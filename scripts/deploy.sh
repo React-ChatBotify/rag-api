@@ -1,33 +1,38 @@
 #!/bin/bash
+set -e
 
-# checks if container name is supplied
-if [ "$#" -eq 0 ]
-then
-    echo "Please specify a container name!"
-    exit 1
+# Checks if APPLICATION_IMAGE is specified
+if [ -z "$APPLICATION_IMAGE" ]; then
+  echo "[ERROR] APPLICATION_IMAGE variable not set."
+  exit 1
 fi
 
-# checks if container exist
-if [ "$(docker ps -a -q -f name=$1)" ]
-then
-    echo "An existing container with the name $1 was found!"
-    
-    # checks if container is running and stop it if it is
-    if [ "$(docker ps -aq -f status=running -f name=$1)" ]
-    then
-        echo "Stopping container..."
-        docker stop $1
-	echo "Container stopped."
-    fi
+# Logs into GHCR using provided credentials (from GitHub CI/CD)
+echo "Logging into GitHub Container Registry..."
+echo "${GHCR_PAT}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
 
-    # removes stopped container
-    echo "Removing stopped container..."
-    docker rm -f $1
-    echo "Container removed."
-fi
+# Pulls application images
+echo "Pulling image: $APPLICATION_IMAGE"
+docker pull "$APPLICATION_IMAGE"
 
-# pull the latest image
-docker pull React-ChatBotify/rag-api:main
+# Changes directory to where the deployment files are
+cd "/opt/rcb-deployments/$PROJECT_NAME"
 
-# run new docker container
-docker run -d --restart always --name $1 --env-file ./.env React-ChatBotify/rag-api:main
+# Replaces placeholder string '${APPLICATION_IMAGE}' with the actual image within compose file.
+echo "Injecting image to override docker compose file..."
+sed -i "s|\${APPLICATION_IMAGE}|$APPLICATION_IMAGE|g" ./docker/docker-compose.override.yml
+
+# Tears down existing containers
+echo "Stopping existing containers..."
+docker compose -p "$PROJECT_NAME" down
+
+# Brings up new containers
+echo "Starting new containers..."
+docker compose -p "$PROJECT_NAME" --env-file ./config/env/.env -f ./docker/docker-compose.yml -f ./docker/docker-compose.override.yml up -d --build
+
+# Cleans up unused docker images
+echo "Pruning unused Docker images..."
+docker image prune -f
+
+# Announces deployment complete
+echo "Deployment complete."
