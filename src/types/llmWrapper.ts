@@ -7,7 +7,7 @@ export type LLMChatRequestOptions = {
   query: string;
   stream?: boolean;
   model?: string; // Optional model override
-  onChunk?: (chunk: Gemini.GeminiStreamChunk) => void; // For streaming, now only Gemini
+  onChunk?: (rawSseLine: string) => void; // For streaming, expects a raw SSE line string
   // Add other common parameters like temperature, max_tokens if they are to be abstracted.
 };
 

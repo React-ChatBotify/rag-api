@@ -31,7 +31,7 @@ const ensureModelPrefixed = (modelId: string): string => {
 const streamGemini = async (
   modelId: GeminiChatModel | string,
   contents: GeminiContent[],
-  onChunk: (chunk: GeminiStreamChunk) => void
+  onChunk: (rawSseLine: string) => void
 ): Promise<void> => {
   if (!config.geminiApiKey) {
     throw new Error('Gemini API key is not configured.');
@@ -69,17 +69,8 @@ const streamGemini = async (
     buffer = lines.pop()!; // Keep the last partial line in buffer
 
     for (const line of lines) {
-      const trimmedLine = line.trim();
-      if (trimmedLine.startsWith('data: ')) {
-        const jsonData = trimmedLine.substring('data: '.length);
-        try {
-          const chunk = JSON.parse(jsonData) as GeminiStreamChunk;
-          onChunk(chunk);
-        } catch (error) {
-          console.error('Failed to parse Gemini stream chunk:', error, jsonData);
-          // Decide on error handling: re-throw, or pass error to onChunk, or ignore.
-        }
-      }
+      // Pass through every line from the source SSE stream to the callback.
+      onChunk(line);
     }
   }
 };

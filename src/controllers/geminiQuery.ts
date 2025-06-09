@@ -212,8 +212,10 @@ export const handleGeminiStream = async (req: Request, res: Response) => {
     try {
       await generateText({
         model: model,
-        onChunk: (chunk: LLMStreamChunk) => {
-          res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        // The onChunk callback now receives a raw SSE line string from llmWrapper.ts
+        onChunk: (rawSseLine: string) => {
+          // Pass the raw SSE line, followed by a single newline, as per SSE spec.
+          res.write(`${rawSseLine}\n`);
         },
         query: augmentedPrompt,
         stream: true,
