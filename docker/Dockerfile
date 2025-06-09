@@ -24,6 +24,8 @@ COPY --from=dependencies /app/node_modules ./node_modules
 
 # Copy specific necessary files and directories
 COPY ./src ./src
+COPY ./types ./types
+COPY ./config ./config
 COPY ./tsconfig.json ./
 COPY ./package.json ./
 
@@ -43,10 +45,7 @@ COPY --from=build /app/build ./build
 COPY --from=build /app/node_modules ./node_modules
 
 # Copy additional files needed for runtime
-COPY package.json ./
-
-# Expose service on port 8080
-EXPOSE 8080
+COPY ./package.json ./
 
 # Start the application
 CMD ["node", "./build/index.js"]

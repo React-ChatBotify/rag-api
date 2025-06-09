@@ -1,6 +1,6 @@
 services:
   api:
-    container_name: api
+    container_name: rag-api
     ports:
       - "${PORT:-8080}:8080"
     volumes:
@@ -14,7 +14,7 @@ services:
       - core-network
 
   chromadb:
-    container_name: chromadb
+    container_name: rag-chromadb
     image: chromadb/chroma
     volumes:
       - chroma-data:/chroma/chroma
@@ -24,7 +24,7 @@ services:
       - core-network
 
   mongodb:
-    container_name: mongodb
+    container_name: rag-mongodb
     image: mongo:6
     restart: unless-stopped
     volumes:
