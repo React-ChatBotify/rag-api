@@ -163,7 +163,7 @@ These endpoints proxy requests to external LLM providers.
 #### RAG API Endpoints
 
 ##### Management Endpoints
-These endpoints are used to manage documents in the RAG system. **They are protected and require an `X-API-Key` header matching the `RAG_MANAGEMENT_API_KEY` defined in your `.env` file.**
+These endpoints are used to manage documents in the RAG system. **They are protected and require an `X-API-KEY` header matching the `RAG_MANAGEMENT_API_KEY` defined in your `.env` file.**
 
 -   **`POST /rag/manage/documents`**
     *   Uploads a Markdown document.
@@ -210,7 +210,7 @@ The default port `8080` is used in these examples.
 
 1.  **Upload a document:**
     ```bash
-    curl -X POST -H "X-API-Key: your_secure_api_key_here" \
+    curl -X POST -H "X-API-KEY: your_secure_api_key_here" \
          -F "documentId=my_test_doc_01" \
          -F "markdownFile=@/path/to/your/document.md" \
          http://localhost:8080/api/v1/rag/manage/documents
@@ -237,13 +237,13 @@ The default port `8080` is used in these examples.
 
 3.  **Get a document's content:**
     ```bash
-    curl -X GET -H "X-API-Key: your_secure_api_key_here" \
+    curl -X GET -H "X-API-KEY: your_secure_api_key_here" \
          http://localhost:8080/api/v1/rag/manage/documents/my_test_doc_01
     ```
 
 4.  **Delete a document:**
     ```bash
-    curl -X DELETE -H "X-API-Key: your_secure_api_key_here" \
+    curl -X DELETE -H "X-API-KEY: your_secure_api_key_here" \
          http://localhost:8080/api/v1/rag/manage/documents/my_test_doc_01
     ```
 

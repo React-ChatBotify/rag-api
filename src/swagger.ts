@@ -4,7 +4,7 @@ const swaggerDocument = {
       ApiKeyAuth: {
         description: 'API Key for accessing protected endpoints.',
         in: 'header',
-        name: 'X-API-Key',
+        name: 'X-API-KEY',
         type: 'apiKey',
       },
     },

@@ -3,7 +3,7 @@ import { NextFunction, Request, Response } from 'express';
 import { config } from '../config';
 
 export const apiKeyAuth = (req: Request, res: Response, next: NextFunction) => {
-  const apiKey = req.header('X-API-Key');
+  const apiKey = req.header('X-API-KEY');
 
   if (!config.ragApiKey || config.ragApiKey.trim() === '') {
     console.error('RAG API Key not configured. Denying access.');
@@ -22,7 +22,7 @@ export const apiKeyAuth = (req: Request, res: Response, next: NextFunction) => {
 };
 
 export const queryApiKeyAuth = (req: Request, res: Response, next: NextFunction) => {
-  const apiKey = req.header('X-API-Key');
+  const apiKey = req.header('X-API-KEY');
 
   if (!config.ragQueryApiKey || config.ragQueryApiKey.trim() === '') {
     console.error('RAG Query API Key not configured. Denying access.');

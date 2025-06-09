@@ -32,7 +32,7 @@ describe('API Key Authentication Middleware (apiKeyAuth)', () => {
   });
 
   it('should call next() if API key is valid', () => {
-    const req = mockRequest({ 'X-API-Key': 'test-api-key' }) as Request;
+    const req = mockRequest({ 'X-API-KEY': 'test-api-key' }) as Request;
     const res = mockResponse() as Response;
 
     apiKeyAuth(req, res, mockNextFunction);
@@ -43,7 +43,7 @@ describe('API Key Authentication Middleware (apiKeyAuth)', () => {
   });
 
   it('should return 401 if API key is missing', () => {
-    const req = mockRequest({}) as Request; // No X-API-Key header
+    const req = mockRequest({}) as Request; // No X-API-KEY header
     const res = mockResponse() as Response;
 
     apiKeyAuth(req, res, mockNextFunction);
@@ -54,7 +54,7 @@ describe('API Key Authentication Middleware (apiKeyAuth)', () => {
   });
 
   it('should return 401 if API key is invalid', () => {
-    const req = mockRequest({ 'X-API-Key': 'invalid-api-key' }) as Request;
+    const req = mockRequest({ 'X-API-KEY': 'invalid-api-key' }) as Request;
     const res = mockResponse() as Response;
 
     apiKeyAuth(req, res, mockNextFunction);
@@ -66,7 +66,7 @@ describe('API Key Authentication Middleware (apiKeyAuth)', () => {
 
   it('should return 500 if RAG API key is not configured on the server (empty string)', () => {
     (config as any).ragApiKey = ''; // Simulate not configured (empty string)
-    const req = mockRequest({ 'X-API-Key': 'any-key' }) as Request;
+    const req = mockRequest({ 'X-API-KEY': 'any-key' }) as Request;
     const res = mockResponse() as Response;
 
     apiKeyAuth(req, res, mockNextFunction);
@@ -80,7 +80,7 @@ describe('API Key Authentication Middleware (apiKeyAuth)', () => {
 
   it('should return 500 if RAG API key is not configured on the server (undefined)', () => {
     (config as any).ragApiKey = undefined; // Simulate not configured (undefined)
-    const req = mockRequest({ 'X-API-Key': 'any-key' }) as Request;
+    const req = mockRequest({ 'X-API-KEY': 'any-key' }) as Request;
     const res = mockResponse() as Response;
 
     apiKeyAuth(req, res, mockNextFunction);
