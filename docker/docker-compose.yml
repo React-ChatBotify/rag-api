@@ -1,0 +1,43 @@
+services:
+  api:
+    container_name: api
+    ports:
+      - "${PORT:-8080}:8080"
+    volumes:
+      - ..:/app
+      - /app/node_modules
+    depends_on:
+      - chromadb
+    env_file:
+      - ../config/env/.env
+    networks:
+      - core-network
+
+  chromadb:
+    container_name: chromadb
+    image: chromadb/chroma
+    volumes:
+      - chroma-data:/chroma/chroma
+    env_file:
+      - ../config/env/.env
+    networks:
+      - core-network
+
+  mongodb:
+    container_name: mongodb
+    image: mongo:6
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    env_file:
+      - ../config/env/.env
+    networks:
+      - core-network
+
+volumes:
+  chroma-data:
+  mongo-data:
+
+networks:
+  core-network:
+    driver: bridge

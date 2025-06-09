@@ -1,0 +1,9 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: ./docker/Dockerfile.local
+    command: npm run start:watch
+    volumes:
+      - ..:/app
+      - /app/node_modules

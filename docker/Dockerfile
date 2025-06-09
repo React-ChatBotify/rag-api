@@ -1,5 +1,5 @@
 # Stage 1: Install dependencies
-FROM node:23-slim AS dependencies
+FROM node:24-slim AS dependencies
 
 # Maintainer information
 LABEL org.opencontainers.image.authors="Tan Jin (tjtanjin)"
@@ -14,7 +14,7 @@ COPY ./package.json ./
 RUN npm install
 
 # Stage 2: Build the application
-FROM node:23-slim AS build
+FROM node:24-slim AS build
 
 # Set the working directory
 WORKDIR /app
@@ -31,7 +31,7 @@ COPY ./package.json ./
 RUN npm run build
 
 # Stage 3: Create the final image
-FROM node:23-slim
+FROM node:24-slim
 
 # Set the working directory inside the container
 WORKDIR /app

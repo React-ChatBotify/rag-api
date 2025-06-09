@@ -102,7 +102,7 @@ Before running the application, you need to set up your environment variables.
     *   `LLM_API_KEY`: Your OpenAI API key (if using OpenAI). (Note: The original template used `GEMINI_API_KEY` and `OPENAI_API_KEY`. This should be updated or clarified based on which keys are actively used by the proxy part).
     *   `OPENAI_API_KEY`: Your OpenAI API key.
     *   `GEMINI_API_KEY`: Your Google Gemini API key.
-    *   `RAG_API_KEY`: A secure API key you define for authenticating RAG management endpoints.
+    *   `RAG_MANAGEMENT_API_KEY`: A secure API key you define for authenticating RAG management endpoints.
     *   `CHROMA_URL`: The URL for the ChromaDB instance. If using the provided `docker-compose.yml`, this will typically be `http://chromadb:8000`.
     *   `EMBEDDING_MODEL_NAME`: The name of the sentence transformer model to use for embeddings (e.g., `Xenova/all-MiniLM-L6-v2`). This model will be downloaded on first use.
 
@@ -163,7 +163,7 @@ These endpoints proxy requests to external LLM providers.
 #### RAG API Endpoints
 
 ##### Management Endpoints
-These endpoints are used to manage documents in the RAG system. **They are protected and require an `X-API-Key` header matching the `RAG_API_KEY` defined in your `.env` file.**
+These endpoints are used to manage documents in the RAG system. **They are protected and require an `X-API-Key` header matching the `RAG_MANAGEMENT_API_KEY` defined in your `.env` file.**
 
 -   **`POST /rag/manage/documents`**
     *   Uploads a Markdown document.
@@ -204,7 +204,7 @@ This endpoint is public and used to query the RAG system.
 
 ### Using the RAG API (Examples)
 
-Replace `your_secure_api_key_here` with the value of `RAG_API_KEY` from your `.env` file.
+Replace `your_secure_api_key_here` with the value of `RAG_MANAGEMENT_API_KEY` from your `.env` file.
 Replace `/path/to/your/document.md` with the actual path to a Markdown file.
 The default port `8080` is used in these examples.
 

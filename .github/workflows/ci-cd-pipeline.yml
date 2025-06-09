@@ -3,7 +3,7 @@ run-name: Full CI/CD Pipeline
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "development"]
     paths-ignore:
       - "*.md" # ignore all markdown files at root
       - "*.js" # ignore all js files at root
@@ -17,7 +17,7 @@ on:
       - ".eslintrc" # ignore eslint changes
       - ".gitignore" # ignore git ignore changes
   pull_request:
-    branches: ["main"]
+    branches: ["main", "development"]
     paths-ignore:
       - "*.md" # ignore all markdown files at root
       - "*.js" # ignore all js files at root
@@ -35,7 +35,9 @@ on:
 jobs:
   trigger-full-ci:
     name: CI
-    uses: ./.github/workflows/lint-and-build.yml
-    with:
-      node-version: "22.4.1"
+    uses: ./.github/workflows/lint.yml
     secrets: inherit
+    with:
+      target_env: ${{ github.ref == 'refs/heads/main' && 'production' || github.ref == 'refs/heads/development' && 'development' || 'invalid' }}
+      node-version: "22.4.1"
+      skip_deploy: ${{ github.event_name == 'pull_request' }} # skip deployment if it's a pull request

@@ -6,9 +6,6 @@ import path from 'path';
 import swaggerUi from 'swagger-ui-express';
 
 import { config } from './config';
-// import { customRouter } from './routers/custom'; // Removed
-// import { geminiRouter } from './routers/gemini'; // Removed
-// import { openaiRouter } from './routers/openai'; // Removed
 import { ragManagementRouter } from './routers/ragManagement';
 import { geminiRouter } from './routers/geminiQuery';
 import swaggerDocument from './swagger';
@@ -18,9 +15,6 @@ const app = express();
 const API_PREFIX = `/api/${process.env.API_VERSION || 'v1'}`;
 app.use(bodyParser.json());
 app.use(cors());
-// app.use(`${API_PREFIX}/`, openaiRouter); // Removed
-// app.use(`${API_PREFIX}/`, geminiRouter); // Removed
-// app.use(`${API_PREFIX}/`, customRouter); // Removed
 app.use(`${API_PREFIX}/rag/manage`, ragManagementRouter);
 app.use(`${API_PREFIX}/`, geminiRouter);
 

@@ -1,0 +1,164 @@
+name: Publish & Deploy
+run-name: Publish & Deploy
+
+on:
+  workflow_call:
+    inputs:
+      target_env:
+        required: true
+        type: string
+        description: 'The deployment environment e.g. production or development'
+
+jobs:
+  publish:
+    name: Publish Docker Image
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target_env }}
+    outputs:
+      # Exposes the TARGET_TAG output from the 'vars' step.
+      target_tag: ${{ steps.vars.outputs.TARGET_TAG }}
+
+    steps:
+      - name: Checkout code
+        # Checks out the repository code.
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        # Prepares Docker Buildx for building multi-platform images.
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        # Logs into GitHub Container Registry using provided credentials.
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.MACHINE_USER }}
+          password: ${{ secrets.MACHINE_PAT }}
+      
+      - name: Determine deployment variables
+        id: vars
+        # Sets Docker image tags for production or development based on branch name.
+        run: |
+          BRANCH_NAME=${GITHUB_REF##*/}
+          if [ "$BRANCH_NAME" = "main" ]; then
+            echo "TARGET_TAG=prod-latest" >> $GITHUB_OUTPUT
+            echo "BACKUP_TAG=prod-previous" >> $GITHUB_OUTPUT
+          elif [ "$BRANCH_NAME" = "development" ]; then
+            echo "TARGET_TAG=dev-latest" >> $GITHUB_OUTPUT
+            echo "BACKUP_TAG=dev-previous" >> $GITHUB_OUTPUT
+          else
+            echo "Unsupported branch: $BRANCH_NAME"
+            exit 1
+          fi
+
+      - name: Backup existing image
+        # Pulls the current image using the target tag and backup it with a previous tag if it exists.
+        run: |
+          OWNER="${{ github.repository_owner }}"
+          BASE="${{ github.event.repository.name }}"
+          IMAGE="ghcr.io/$OWNER/$BASE:${{ steps.vars.outputs.TARGET_TAG }}"
+          BACKUP="ghcr.io/$OWNER/$BASE:${{ steps.vars.outputs.BACKUP_TAG }}"
+          echo "Backing up image if it exists: $IMAGE → $BACKUP"
+          if docker pull "$IMAGE"; then
+            docker tag "$IMAGE" "$BACKUP"
+            docker push "$BACKUP"
+          else
+            echo "No image to back up."
+          fi
+
+      - name: Cleanup Old Image Digests
+        # Cleans up old images
+        uses: actions/delete-package-versions@v5
+        continue-on-error: true
+        with:
+          package-name: ${{ github.event.repository.name }}
+          package-type: container
+          owner: ${{ github.repository_owner }}
+          min-versions-to-keep: 2 # Keeps the 2 most recent versions (latest and previous)
+          token: ${{ secrets.MACHINE_PAT }}
+
+      - name: Build & push image
+        # Builds a new Docker image with the target tag and pushes it to GHCR.
+        run: |
+          OWNER=${{ github.repository_owner }}
+          BASE=${{ github.event.repository.name }}
+          TAG=${{ steps.vars.outputs.TARGET_TAG }}
+          IMAGE=ghcr.io/$OWNER/$BASE:$TAG
+
+          echo "Building image with tag $IMAGE"
+
+          docker build \
+            --file docker/Dockerfile \
+            --tag $IMAGE \
+            .
+
+          docker push $IMAGE
+
+  deploy:
+    needs: publish
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target_env }}
+    steps:
+      - name: Checkout code
+        # Checks out the repository code.
+        uses: actions/checkout@v4
+
+      - name: Set up SSH key
+        # Sets up the SSH key for the server.
+        run: |
+          # Create the .ssh directory if it doesn't exist.
+          mkdir -p ~/.ssh
+          # Write the SSH private key to file.
+          echo "${{ secrets.DEPLOYMENT_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          # Add the server to known_hosts to avoid authenticity prompts.
+          ssh-keyscan -H ${{ secrets.DEPLOYMENT_SERVER }} >> ~/.ssh/known_hosts
+
+      - name: Upload deployment files to server
+        # Creates project directory and uploads required files to server
+        run: |
+          # create env file
+          echo "${{ secrets.APPLICATION_ENV_FILE }}" > ./config/env/.env
+
+          # copy all config files over
+          ssh -o StrictHostKeyChecking=no ${{ secrets.DEPLOYMENT_SSH_USER }}@${{ secrets.DEPLOYMENT_SERVER }} \
+          "mkdir -p /opt/rcb-deployments/${{ vars.PROJECT_NAME }}/config /opt/rcb-deployments/${{ vars.PROJECT_NAME }}/docker"
+
+          scp -r -o StrictHostKeyChecking=no ./config/* \
+          ${{ secrets.DEPLOYMENT_SSH_USER }}@${{ secrets.DEPLOYMENT_SERVER }}:/opt/rcb-deployments/${{ vars.PROJECT_NAME }}/config/
+
+          # copy compose files
+          scp -o StrictHostKeyChecking=no docker/docker-compose.yml ${{ secrets.DEPLOYMENT_SSH_USER }}@${{ secrets.DEPLOYMENT_SERVER }}:/opt/rcb-deployments/${{ vars.PROJECT_NAME }}/docker/docker-compose.yml
+          if [ "${{ needs.publish.outputs.target_tag }}" = "prod-latest" ]; then
+            scp -o StrictHostKeyChecking=no docker/docker-compose.prod.yml ${{ secrets.DEPLOYMENT_SSH_USER }}@${{ secrets.DEPLOYMENT_SERVER }}:/opt/rcb-deployments/${{ vars.PROJECT_NAME }}/docker/docker-compose.override.yml
+            scp -o StrictHostKeyChecking=no otel-config.yaml ${{ secrets.DEPLOYMENT_SSH_USER }}@${{ secrets.DEPLOYMENT_SERVER }}:/opt/rcb-deployments/${{ vars.PROJECT_NAME }}/otel-config.yaml
+          else
+            scp -o StrictHostKeyChecking=no docker/docker-compose.dev.yml ${{ secrets.DEPLOYMENT_SSH_USER }}@${{ secrets.DEPLOYMENT_SERVER }}:/opt/rcb-deployments/${{ vars.PROJECT_NAME }}/docker/docker-compose.override.yml
+          fi
+
+          # copy deploy script
+          scp -o StrictHostKeyChecking=no scripts/deploy.sh ${{ secrets.DEPLOYMENT_SSH_USER }}@${{ secrets.DEPLOYMENT_SERVER }}:/opt/rcb-deployments/${{ vars.PROJECT_NAME }}/deploy.sh
+          ssh -o StrictHostKeyChecking=no ${{ secrets.DEPLOYMENT_SSH_USER }}@${{ secrets.DEPLOYMENT_SERVER }} "\
+            chmod +x /opt/rcb-deployments/${{ vars.PROJECT_NAME }}/deploy.sh"
+
+      - name: Deploy to VPS
+        # Deploys to VPS.
+        run: |
+          OWNER="${{ vars.GHCR_OWNER }}"
+          APPLICATION_IMAGE="ghcr.io/$OWNER/${{ github.event.repository.name }}:${{ needs.publish.outputs.target_tag }}"
+          echo "Deploying to VPS..."
+          ssh -o StrictHostKeyChecking=no ${{ secrets.DEPLOYMENT_SSH_USER }}@${{ secrets.DEPLOYMENT_SERVER }} "\
+
+            # exports general variables
+            export PROJECT_NAME='${{ vars.PROJECT_NAME }}' && \
+            export GHCR_USER='${{ secrets.MACHINE_USER }}' && \
+            export GHCR_PAT='${{ secrets.MACHINE_PAT }}' && \
+            export APPLICATION_IMAGE='$APPLICATION_IMAGE' && \
+
+            # applies only to production for logging
+            export HONEYCOMB_API_KEY='${{ secrets.HONEYCOMB_API_KEY }}' && \
+            export HONEYCOMB_DATASET='${{ secrets.HONEYCOMB_DATASET }}' && \
+
+            # runs deploy script
+            /opt/rcb-deployments/${{ vars.PROJECT_NAME }}/deploy.sh"

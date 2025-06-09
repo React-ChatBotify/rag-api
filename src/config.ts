@@ -6,8 +6,8 @@ export const config = {
 	// Server Configuration
 	port: process.env.PORT || 8080,
 
-	// RAG Service API Key (protects management endpoints)
-	ragApiKey: process.env.RAG_API_KEY!,
+	// RAG Management API Key (protects management endpoints)
+	ragApiKey: process.env.RAG_MANAGEMENT_API_KEY!,
 
 	// Gemini Configuration
 	geminiBaseUrl: process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta',

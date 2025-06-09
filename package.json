@@ -8,8 +8,9 @@
     "build": "npx tsc --build",
     "lint": "eslint \"{src,test,types}/**/*.ts\" --fix",
     "test": "jest",
-    "dev": "docker compose -p dev -f ./docker/docker-compose.dev.yml down && docker compose -p dev -f ./docker/docker-compose.dev.yml up --build",
-    "dev:watch": "nodemon --config nodemon.json"
+    "start": "docker compose -p rcb-rag-api --env-file ./config/env/.env -f ./docker/docker-compose.yml -f ./docker/docker-compose.override.yml up -d --build",
+    "stop": "docker compose -p rcb-rag-api down",
+    "start:watch": "nodemon --config nodemon.json"
   },
   "author": "tjtanjin",
   "license": "MIT",
