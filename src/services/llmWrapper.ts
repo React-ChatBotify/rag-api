@@ -4,12 +4,10 @@ import {
   GeminiChatModel as GeminiModelName,
   GeminiContent,
   GeminiEmbeddingModel,
-  GeminiStreamChunk,
   LLMChatRequestOptions,
   LLMChatResponse,
   LLMEmbeddingsRequestOptions,
   LLMEmbeddingsResponse,
-  LLMStreamChunk,
 } from '../types';
 import {
   batchEmbedContents as batchGeminiEmbeddings,

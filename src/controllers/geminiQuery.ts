@@ -3,7 +3,7 @@ import { Request, Response } from 'express';
 import { config } from '../config';
 import { generateText } from '../services/llmWrapper';
 import { initializedRagService } from '../services/ragService';
-import { GeminiQueryRequest, LLMChatResponse, LLMStreamChunk } from '../types';
+import { GeminiQueryRequest, LLMChatResponse } from '../types';
 
 export const handleGeminiBatch = async (req: Request, res: Response) => {
   const model = req.params.model;

@@ -18,6 +18,7 @@ const allowedOrigins = process.env.FRONTEND_WEBSITE_URLS?.split(',').map((origin
 // handle cors with a dynamic origin function
 app.use(
   cors({
+    credentials: true,
     origin: (origin, callback) => {
       // allow requests with no origin (like mobile apps, curl requests)
       if (!origin) return callback(null, true);
@@ -31,7 +32,6 @@ app.use(
         return callback(new Error(`Not allowed by CORS: ${origin}`));
       }
     },
-    credentials: true,
   })
 );
 app.use(`${API_PREFIX}/rag/manage`, ragManagementRouter);

@@ -79,9 +79,6 @@ export type GeminiChatPayload = {
   // `model` is part of the URL for Gemini, not typically in the payload body for generateContent.
 };
 
-// This will be GeminiChatCompletionResponse itself, as Gemini streams full response objects.
-export type GeminiStreamChunk = GeminiChatCompletionResponse;
-
 export type GeminiQueryRequest = {
   contents: GeminiContent[];
 };

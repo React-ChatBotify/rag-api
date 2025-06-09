@@ -21,5 +21,3 @@ export type LLMEmbeddingsRequestOptions = {
 export type LLMChatResponse = Gemini.GeminiChatCompletionResponse;
 
 export type LLMEmbeddingsResponse = Gemini.GeminiBatchEmbeddingsResponse;
-
-export type LLMStreamChunk = Gemini.GeminiStreamChunk;

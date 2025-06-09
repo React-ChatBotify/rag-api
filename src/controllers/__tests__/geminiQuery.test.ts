@@ -4,7 +4,7 @@ import { Request, Response } from 'express';
 import * as configModule from '../../config';
 import { generateText } from '../../services/llmWrapper';
 import { initializedRagService } from '../../services/ragService';
-import { GeminiChatCompletionResponse, GeminiStreamChunk } from '../../types';
+import { GeminiChatCompletionResponse } from '../../types';
 import { handleGeminiBatch, handleGeminiStream } from '../geminiQuery';
 
 // Mock src/config
@@ -19,11 +19,11 @@ jest.mock('../../config', () => ({
 
     chromaPort: '8000',
 
+    chromaUrl: 'http://localhost',
+
     geminiApiKey: 'test-api-key',
 
     geminiChatModel: 'gemini-pro',
-
-    chromaUrl: 'http://localhost',
 
     // Default mock, can be overridden per test
     geminiEmbeddingModel: 'text-embedding-004',
@@ -291,10 +291,10 @@ describe('Gemini RAG Query Controllers', () => {
       const res = mockResponse() as Response;
       mockRagService.queryChunks.mockResolvedValue([]); // No RAG context
 
-      const streamChunk1: GeminiStreamChunk = {
+      const streamChunk1 = {
         candidates: [{ content: { parts: [{ text: 'Stream chunk 1' }], role: 'model' }, index: 0 }],
       };
-      const streamChunk2: GeminiStreamChunk = {
+      const streamChunk2 = {
         candidates: [{ content: { parts: [{ text: 'Stream chunk 2' }], role: 'model' }, index: 0 }],
       };
 

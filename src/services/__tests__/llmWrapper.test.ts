@@ -1,12 +1,10 @@
 import { config } from '../../config';
 import {
-  // LLMStreamChunk is GeminiStreamChunk, already imported
   GeminiBatchEmbeddingsRequest,
   GeminiBatchEmbeddingsResponse,
   GeminiChatCompletionResponse,
   GeminiContent,
   GeminiEmbedding,
-  GeminiStreamChunk,
   LLMChatResponse,
   LLMEmbeddingsResponse,
 } from '../../types';
@@ -64,7 +62,7 @@ describe('LLM Wrapper Service (Gemini-only)', () => {
 
     it('should call streamGenerateContent and trigger onChunk for streaming requests', async () => {
       const mockOnChunk = jest.fn();
-      const mockChunk: GeminiStreamChunk = {
+      const mockChunk = {
         candidates: [{ content: { parts: [{ text: 'Hello' }], role: 'model' }, index: 0 }], // Added index
       };
 
