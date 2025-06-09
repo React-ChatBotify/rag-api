@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 
 import { config } from '../config';
+import Logger from '../logger';
 import { generateText } from '../services/llmWrapper';
 import { initializedRagService } from '../services/ragService';
 import { GeminiQueryRequest, LLMChatResponse } from '../types';
@@ -34,7 +35,7 @@ export const handleGeminiBatch = async (req: Request, res: Response) => {
     const rag_type = config.geminiRagType;
     const numberOfResults = config.geminiNResults;
 
-    console.log(
+    Logger.info(
       `INFO: Gemini Batch Request. Model: ${model}. RAG Type (from config): ${rag_type}. N Results (from config): ${numberOfResults}.`
     );
 
@@ -83,7 +84,7 @@ export const handleGeminiBatch = async (req: Request, res: Response) => {
       }
     }
 
-    // console.log(`INFO: Gemini Batch Request. Model: ${model}. RAG Type: ${rag_type}.`); // Already logged above with more details
+    // Logger.info(`INFO: Gemini Batch Request. Model: ${model}. RAG Type: ${rag_type}.`); // Already logged above with more details
 
     try {
       const llmResponse = (await generateText({
@@ -93,13 +94,13 @@ export const handleGeminiBatch = async (req: Request, res: Response) => {
       })) as LLMChatResponse;
       res.status(200).json(llmResponse);
     } catch (llmError: any) {
-      console.error(`Error calling llmWrapper for Gemini batch (model: ${model}):`, llmError);
+      Logger.error(`Error calling llmWrapper for Gemini batch (model: ${model}):`, llmError);
       return res
         .status(500)
         .json({ details: llmError.message, error: `Failed to get response from LLM provider Gemini.` });
     }
   } catch (error: any) {
-    console.error(`Error in handleGeminiBatch for model ${model}, query "${userQuery}":`, error); // Use userQuery for logging
+    Logger.error(`Error in handleGeminiBatch for model ${model}, query "${userQuery}":`, error); // Use userQuery for logging
     if (error.message && error.message.includes('ChromaDB collection is not initialized')) {
       return res.status(503).json({ error: 'Service Unavailable: RAG service is not ready.' });
     }
@@ -158,7 +159,7 @@ export const handleGeminiStream = async (req: Request, res: Response) => {
     const rag_type = config.geminiRagType;
     const numberOfResults = config.geminiNResults;
 
-    console.log(
+    Logger.info(
       `INFO: Gemini Stream Request. Model: ${model}. RAG Type (from config): ${rag_type}. N Results (from config): ${numberOfResults}.`
     );
 
@@ -207,7 +208,7 @@ export const handleGeminiStream = async (req: Request, res: Response) => {
       }
     }
 
-    // console.log(`INFO: Gemini Stream Request. Model: ${model}. RAG Type: ${rag_type}.`); // Already logged above
+    // Logger.info(`INFO: Gemini Stream Request. Model: ${model}. RAG Type: ${rag_type}.`); // Already logged above
 
     try {
       await generateText({
@@ -222,7 +223,7 @@ export const handleGeminiStream = async (req: Request, res: Response) => {
       });
       res.end();
     } catch (llmError: any) {
-      console.error(`Error calling llmWrapper for Gemini stream (model: ${model}):`, llmError);
+      Logger.error(`Error calling llmWrapper for Gemini stream (model: ${model}):`, llmError);
       if (!res.writableEnded) {
         // Check if stream is still open
         res.write(
@@ -232,7 +233,7 @@ export const handleGeminiStream = async (req: Request, res: Response) => {
       }
     }
   } catch (error: any) {
-    console.error(`Error in handleGeminiStream for model ${model}, query "${userQuery}":`, error); // Use userQuery for logging
+    Logger.error(`Error in handleGeminiStream for model ${model}, query "${userQuery}":`, error); // Use userQuery for logging
     if (!res.headersSent) {
       // This case should ideally not be reached if query validation is first.
       // However, for other early errors (like RAG service init), this is a fallback.

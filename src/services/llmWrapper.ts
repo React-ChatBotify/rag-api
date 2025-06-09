@@ -1,4 +1,5 @@
 import { config } from '../config';
+import Logger from '../logger';
 import {
   GeminiBatchEmbeddingsRequest,
   GeminiChatModel as GeminiModelName,
@@ -52,7 +53,7 @@ export const generateText = async (
       return response;
     }
   } catch (error) {
-    console.error(`Error generating text with Gemini:`, error);
+    Logger.error(`Error generating text with Gemini:`, error);
     throw error;
   }
 };
@@ -83,7 +84,7 @@ export const generateEmbeddings = async (
     // LLMEmbeddingsResponse is now GeminiBatchEmbeddingsResponse, return directly.
     return response;
   } catch (error) {
-    console.error(`Error generating embeddings with Gemini:`, error);
+    Logger.error(`Error generating embeddings with Gemini:`, error);
     throw error;
   }
 };

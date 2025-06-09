@@ -6,6 +6,7 @@ import path from 'path';
 import swaggerUi from 'swagger-ui-express';
 
 import { config } from './config';
+import Logger from './logger';
 import { geminiRouter } from './routers/geminiQuery';
 import { ragManagementRouter } from './routers/ragManagement';
 import swaggerDocument from './swagger';
@@ -28,7 +29,7 @@ app.use(
         return callback(null, true);
       } else {
         // if the origin is not found in the allowedOrigins array, block it
-        console.info(`Allowed origins: ${allowedOrigins}`);
+        Logger.info(`Allowed origins: ${allowedOrigins}`);
         return callback(new Error(`Not allowed by CORS: ${origin}`));
       }
     },
@@ -66,11 +67,11 @@ const loadSwaggerFiles = async () => {
     swaggerUi.setup()
   );
 
-  console.info(`Swagger docs loaded.`);
+  Logger.info(`Swagger docs loaded.`);
 };
 
 loadSwaggerFiles();
 
 app.listen(config.port, () => {
-  console.info(`LLM proxy service listening on port: ${config.port}`);
+  Logger.info(`LLM proxy service listening on port: ${config.port}`);
 });

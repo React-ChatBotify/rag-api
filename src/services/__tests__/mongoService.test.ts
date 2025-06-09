@@ -17,7 +17,7 @@ const mockDb = jest.fn(() => ({
 
 // 3. Define the mock constructor for MongoClient. This uses the above mocks.
 const mockMongoClientConstructor = jest.fn((uri) => {
-  console.log('[Mock CONSTRUCTOR] MongoClient called with URI:', uri);
+  Logger.info('[Mock CONSTRUCTOR] MongoClient called with URI:', uri);
   return {
     close: mockClose,
     connect: mockConnect,
@@ -73,7 +73,7 @@ describe('MongoService', () => {
 
   describe('constructor and connect', () => {
     it('should have instantiated MongoClient with config.MONGODB_URI upon import', () => {
-      console.log('[TEST] Expected URI:', config.MONGODB_URI);
+      Logger.info('[TEST] Expected URI:', config.MONGODB_URI);
 
       // Verify that our setup is correct:
       expect(ImportedMockClient).toBe(mockMongoClientConstructor); // This passed before

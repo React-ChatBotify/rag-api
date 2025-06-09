@@ -1,4 +1,5 @@
 import { config } from '../config';
+import Logger from '../logger';
 import {
   GeminiBatchEmbeddingsRequest,
   GeminiBatchEmbeddingsResponse,
@@ -93,7 +94,7 @@ const batchGemini = async (
   // Use the provided modelId, not config.geminiChatModel directly, for flexibility
   const url = `${GEMINI_API_BASE_URL}/models/${config.geminiChatModel}:generateContent` + `?key=${config.geminiApiKey}`;
 
-  console.log(url);
+  Logger.info(url);
 
   const bodyPayload: { contents: GeminiContent[] } = { contents };
 
@@ -140,7 +141,7 @@ const batchEmbedContents = async (payload: GeminiBatchEmbeddingsRequest): Promis
 
   if (!response.ok) {
     const errorBody = await response.text();
-    console.error(`Gemini API error (batchEmbedContents): ${response.status} ${response.statusText}`, errorBody);
+    Logger.error(`Gemini API error (batchEmbedContents): ${response.status} ${response.statusText}`, errorBody);
     throw new Error(`Gemini API request failed (batchEmbedContents): ${response.status} ${errorBody}`);
   }
 

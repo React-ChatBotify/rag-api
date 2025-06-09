@@ -6,7 +6,7 @@ export const apiKeyAuth = (req: Request, res: Response, next: NextFunction) => {
   const apiKey = req.header('X-API-KEY');
 
   if (!config.ragManagementApiKey || config.ragManagementApiKey.trim() === '') {
-    console.error('RAG API Key not configured. Denying access.');
+    Logger.error('RAG API Key not configured. Denying access.');
     return res.status(500).json({ error: 'Internal Server Error. API key for RAG service not configured.' });
   }
 
@@ -25,7 +25,7 @@ export const queryApiKeyAuth = (req: Request, res: Response, next: NextFunction)
   const apiKey = req.header('X-API-KEY');
 
   if (!config.ragQueryApiKey || config.ragQueryApiKey.trim() === '') {
-    console.error('RAG Query API Key not configured. Denying access.');
+    Logger.error('RAG Query API Key not configured. Denying access.');
     return res.status(500).json({ error: 'Internal Server Error. API key for RAG query service not configured.' });
   }
 

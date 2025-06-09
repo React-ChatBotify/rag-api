@@ -45,11 +45,11 @@ export class RAGService {
         name: this.collectionName,
         // Optional: metadata: { "hnsw:space": "cosine" }
       });
-      console.info(
+      Logger.info(
         `ChromaDB collection '${this.collectionName}' ensured for tenant '${config.chromaTenant}' and database '${config.chromaDatabase}'.`
       );
     } catch (error) {
-      console.error(
+      Logger.error(
         `Error initializing ChromaDB collection for tenant '${config.chromaTenant}', database '${config.chromaDatabase}':`,
         error
       );
@@ -114,7 +114,7 @@ export class RAGService {
         !embeddingResponse.embeddings[0].values
       ) {
         // Changed .embedding to .values
-        console.error(`Failed to generate embedding for chunk ID: ${chunk.id}. Skipping.`); // Removed provider from log
+        Logger.error(`Failed to generate embedding for chunk ID: ${chunk.id}. Skipping.`); // Removed provider from log
         // Potentially skip this chunk or throw an error to halt the process
         continue;
       }
@@ -129,9 +129,9 @@ export class RAGService {
 
     try {
       await this.chromaCollection.add({ embeddings, ids, metadatas });
-      console.info(`Added ${chunks.length} chunks for document ID: ${documentId}`);
+      Logger.info(`Added ${chunks.length} chunks for document ID: ${documentId}`);
     } catch (error) {
-      console.error(`Error adding document ID ${documentId} to ChromaDB:`, error);
+      Logger.error(`Error adding document ID ${documentId} to ChromaDB:`, error);
       throw error;
     }
   }
@@ -166,10 +166,10 @@ export class RAGService {
           });
         }
       }
-      console.info(`Retrieved ${chunks.length} chunks for document ID: ${documentId}`);
+      Logger.info(`Retrieved ${chunks.length} chunks for document ID: ${documentId}`);
       return chunks;
     } catch (error) {
-      console.error(`Error retrieving chunks for document ID ${documentId}:`, error);
+      Logger.error(`Error retrieving chunks for document ID ${documentId}:`, error);
       throw error;
     }
   }
@@ -178,20 +178,20 @@ export class RAGService {
     try {
       const parentDocument = await mongoService.getDocument(documentId);
       if (parentDocument) {
-        console.info(`Retrieved parent document content for ID: ${documentId} from MongoDB`);
+        Logger.info(`Retrieved parent document content for ID: ${documentId} from MongoDB`);
         return parentDocument.content;
       } else {
         console.warn(`Parent document ID: ${documentId} not found in MongoDB.`);
         return null;
       }
     } catch (error) {
-      console.error(`Error retrieving parent document content for ID ${documentId} from MongoDB:`, error);
+      Logger.error(`Error retrieving parent document content for ID ${documentId} from MongoDB:`, error);
       throw error; // Or handle more gracefully, e.g., return null
     }
   }
 
   public async updateDocument(documentId: string, newMarkdownContent: string): Promise<void> {
-    console.info(`Attempting to update document ID: ${documentId}`);
+    Logger.info(`Attempting to update document ID: ${documentId}`);
 
     // Step 1: Delete old chunks from ChromaDB
     if (!this.chromaCollection) {
@@ -204,14 +204,14 @@ export class RAGService {
     const chunkIdsToDelete = results.ids;
     if (chunkIdsToDelete && chunkIdsToDelete.length > 0) {
       await this.chromaCollection.delete({ ids: chunkIdsToDelete });
-      console.info(`Deleted ${chunkIdsToDelete.length} old chunks for document ID: ${documentId} as part of update.`);
+      Logger.info(`Deleted ${chunkIdsToDelete.length} old chunks for document ID: ${documentId} as part of update.`);
     } else {
-      console.info(`No old chunks found to delete for document ID: ${documentId} during update.`);
+      Logger.info(`No old chunks found to delete for document ID: ${documentId} during update.`);
     }
 
     // Step 2: Add the new document version (which saves to Mongo and adds new chunks to Chroma)
     await this.addDocument(documentId, newMarkdownContent);
-    console.info(`Successfully updated document ID: ${documentId}`);
+    Logger.info(`Successfully updated document ID: ${documentId}`);
   }
 
   public async deleteDocument(documentId: string): Promise<void> {
@@ -229,16 +229,16 @@ export class RAGService {
 
       if (chunkIdsToDelete && chunkIdsToDelete.length > 0) {
         await this.chromaCollection.delete({ ids: chunkIdsToDelete });
-        console.info(`Deleted ${chunkIdsToDelete.length} chunks from ChromaDB for document ID: ${documentId}`);
+        Logger.info(`Deleted ${chunkIdsToDelete.length} chunks from ChromaDB for document ID: ${documentId}`);
       } else {
-        console.info(`No chunks found in ChromaDB to delete for document ID: ${documentId}`);
+        Logger.info(`No chunks found in ChromaDB to delete for document ID: ${documentId}`);
       }
 
       // Delete parent document from MongoDB
       await mongoService.deleteDocument(documentId);
-      console.info(`Parent document ID: ${documentId} deleted from MongoDB.`);
+      Logger.info(`Parent document ID: ${documentId} deleted from MongoDB.`);
     } catch (error) {
-      console.error(`Error deleting document ID ${documentId} from stores:`, error);
+      Logger.error(`Error deleting document ID ${documentId} from stores:`, error);
       throw error; // Re-throw to allow controller to handle
     }
   }
@@ -260,7 +260,7 @@ export class RAGService {
         !embeddingResponse.embeddings[0].values
       ) {
         // Changed to check .values
-        console.error(`Failed to generate query embedding for text: "${queryText}".`); // Removed provider from log
+        Logger.error(`Failed to generate query embedding for text: "${queryText}".`); // Removed provider from log
         throw new Error('Failed to generate query embedding.');
       }
       const queryEmbedding = embeddingResponse.embeddings[0].values; // Assuming .values is correct
@@ -285,10 +285,10 @@ export class RAGService {
           });
         }
       }
-      console.info(`Query for "${queryText}" returned ${processedResults.length} chunks.`);
+      Logger.info(`Query for "${queryText}" returned ${processedResults.length} chunks.`);
       return processedResults;
     } catch (error) {
-      console.error(`Error querying chunks for text "${queryText}":`, error);
+      Logger.error(`Error querying chunks for text "${queryText}":`, error);
       throw error;
     }
   }
@@ -302,6 +302,6 @@ export const initializedRagService = mongoService
   .then(() => ragServiceInstance.init())
   .then(() => ragServiceInstance)
   .catch((err) => {
-    console.error('Failed to initialize RAGService or connect to MongoDB:', err);
+    Logger.error('Failed to initialize RAGService or connect to MongoDB:', err);
     process.exit(1); // Or handle more gracefully
   });

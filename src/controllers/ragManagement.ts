@@ -17,7 +17,7 @@ export const createDocument = async (req: Request, res: Response) => {
     await ragService.addDocument(documentId, markdownContent);
     return res.status(201).json({ documentId, message: 'Document added successfully' });
   } catch (error: any) {
-    console.error(`Error in createDocument for ID ${req.body.documentId}:`, error);
+    Logger.error(`Error in createDocument for ID ${req.body.documentId}:`, error);
     // Check for specific error types if ragService throws custom errors
     if (error.message && error.message.includes('ChromaDB collection is not initialized')) {
       return res.status(503).json({ error: 'Service Unavailable: RAG service is not ready.' });
@@ -42,7 +42,7 @@ export const getDocument = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Not Found: Document not found.' });
     }
   } catch (error: any) {
-    console.error(`Error in getDocument for ID ${req.params.documentId}:`, error);
+    Logger.error(`Error in getDocument for ID ${req.params.documentId}:`, error);
     if (error.message && error.message.includes('ChromaDB collection is not initialized')) {
       return res.status(503).json({ error: 'Service Unavailable: RAG service is not ready.' });
     }
@@ -77,7 +77,7 @@ export const updateDocument = async (req: Request, res: Response) => {
     await ragService.updateDocument(documentId, markdownContent);
     return res.status(200).json({ documentId, message: 'Document updated successfully' });
   } catch (error: any) {
-    console.error(`Error in updateDocument for ID ${req.params.documentId}:`, error);
+    Logger.error(`Error in updateDocument for ID ${req.params.documentId}:`, error);
     if (error.message && error.message.includes('ChromaDB collection is not initialized')) {
       return res.status(503).json({ error: 'Service Unavailable: RAG service is not ready.' });
     }
@@ -98,7 +98,7 @@ export const deleteDocument = async (req: Request, res: Response) => {
     // So, a 200 is fine here, or 204. 200 with message is more informative.
     return res.status(200).json({ documentId, message: 'Document deleted successfully (or did not exist)' });
   } catch (error: any) {
-    console.error(`Error in deleteDocument for ID ${req.params.documentId}:`, error);
+    Logger.error(`Error in deleteDocument for ID ${req.params.documentId}:`, error);
     if (error.message && error.message.includes('ChromaDB collection is not initialized')) {
       return res.status(503).json({ error: 'Service Unavailable: RAG service is not ready.' });
     }
