@@ -11,7 +11,7 @@ const swaggerDocument = {
                 type: "apiKey",
                 in: "header",
                 name: "X-API-Key",
-                description: "API Key for accessing protected RAG management endpoints."
+                description: "API Key for accessing protected endpoints."
             }
         }
     }

@@ -7,6 +7,11 @@ const geminiQueryPaths = {
     post: {
       summary: "Gemini batch generation (non‐streaming)",
       tags: ["Gemini Query"],
+      security: [
+        {
+          "ApiKeyAuth": []
+        }
+      ],
       parameters: [
         {
           name: "model",
@@ -117,6 +122,11 @@ const geminiQueryPaths = {
     post: {
       summary: "Gemini streaming generation (SSE)",
       tags: ["Gemini Query"],
+      security: [
+        {
+          "ApiKeyAuth": []
+        }
+      ],
       parameters: [
         {
           name: "model",

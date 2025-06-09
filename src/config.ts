@@ -8,6 +8,7 @@ export const config = {
 
 	// RAG Management API Key (protects management endpoints)
 	ragApiKey: process.env.RAG_MANAGEMENT_API_KEY!,
+	ragQueryApiKey: process.env.RAG_QUERY_API_KEY!,
 
 	// Gemini Configuration
 	geminiBaseUrl: process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta',
