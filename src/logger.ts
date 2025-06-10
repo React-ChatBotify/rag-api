@@ -1,5 +1,6 @@
 import path from 'path';
 import winston from 'winston';
+import { OpenTelemetryTransportV3 } from '@opentelemetry/winston-transport';
 
 // Define the severity levels
 const levels = {
@@ -56,6 +57,7 @@ const transports = [
           format: formatForFile,
           level: 'error',
         }),
+        new OpenTelemetryTransportV3({}),
       ]
     : []),
 ];
