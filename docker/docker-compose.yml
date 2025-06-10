@@ -1,6 +1,8 @@
 services:
   api:
     container_name: rag-api
+    environment:
+      - NODE_ENV=local
     ports:
       - "${PORT:-8080}:8080"
     depends_on:

@@ -30,12 +30,12 @@ const resource = new Resource({
 
 // Trace Exporter
 const otelTraceExporter = new OTLPTraceExporter({
-  url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'otel-collector:4317',
+  url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://otel-collector:4317',
 });
 
 // Log Exporter
 const otelLogExporter = new OTLPLogExporter({
-  url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'otel-collector:4317',
+  url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://otel-collector:4317',
 });
 
 // Logger Provider
