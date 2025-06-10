@@ -1,42 +1,44 @@
 <p align="center">
-  <img width="200px" src="https://raw.githubusercontent.com/React-ChatBotify/rag-api/main/assets/logo.png" />
-  <h1 align="center">LLM Proxy</h1>
+  <img width="200px" src="https://raw.githubusercontent.com/react-chatbotify/rag-api/main/assets/logo.png" />
+  <h1 align="center">React ChatBotify RAG API</h1>
 </p>
 
 <p align="center">
-  <a href="https://github.com/React-ChatBotify/rag-api/actions/workflows/ci-cd-pipeline.yml"> <img src="https://github.com/React-ChatBotify/rag-api/actions/workflows/ci-cd-pipeline.yml/badge.svg" /> </a>
+  <a href="https://github.com/react-chatbotify/rag-api/actions/workflows/ci-cd-pipeline.yml"> <img src="https://github.com/react-chatbotify/rag-api/actions/workflows/ci-cd-pipeline.yml/badge.svg" /> </a>
 </p>
 
 ## Table of Contents
 * [Introduction](#introduction)
 * [Features](#features)
 * [Technologies](#technologies)
+* [Setup](#setup)
 * [Docker Deployment](#docker-deployment)
-* [Development Setup](#development-setup)
 * [Team](#team)
 * [Contributing](#contributing)
 * [Others](#others)
 
 ### Introduction
-**LLM Proxy** is a simple demo project that serves as a proxy for [**OpenAI API**](https://platform.openai.com/) and [**Google Gemini API**](https://ai.google.dev/gemini-api/docs). It also provides an additional custom endpoint for testing purposes. 
+**React ChatBotify RAG API** is a lightweight project that serves as an LLM proxy for [**Google Gemini API**](https://ai.google.dev/gemini-api/docs). Notably, it is curated to pick out and utilize knowledge specific to React ChatBotify.
 
-**New in this version:** The project now includes a **Retrieval Augmented Generation (RAG)** system. This allows you to upload Markdown documents, which are then chunked, embedded, and stored in a [**ChromaDB**](https://www.trychroma.com/) vector database. You can then query these documents, and the system will retrieve relevant chunks to augment the context provided to the Language Model (LLM), enabling more informed and context-aware responses. A key feature of this RAG implementation is its ability to retrieve and use the full content of the original parent documents from which relevant chunks were found, providing richer context to the LLM.
+The project includes a **Retrieval Augmented Generation (RAG)** system. This allows one to upload Markdown documents, which are then chunked, embedded, and stored in a [**ChromaDB**](https://www.trychroma.com/) vector database. When queries are received, the system will retrieve relevant chunks to augment the context provided to the Language Model (LLM), enabling more informed and context-aware responses. A key feature of this RAG implementation is its ability to retrieve and use the full content of the original parent documents from which relevant chunks were found, providing richer context to the LLM.
 
-All functionalities, including the original proxy endpoints and the new RAG endpoints, are exposed via [**Swagger docs**](https://swagger.io/docs/) under the `/api/v1/docs` endpoint.
+All functionalities, including both query and management endpoints, are exposed via [**Swagger docs**](https://swagger.io/docs/) under the `/api/v1/docs` endpoint.
 
-This demo project was created in private during the development of [**LLM Connector**](https://github.com/React-ChatBotify-Plugins/llm-connector) - an official [**React ChatBotify**](https://react-chatbotify.com) plugin. It has since been made public to serve as a simple demo project (not just for plugin users, but also anyone interested in a simple LLM proxy with RAG capabilities).
-
-Note that this LLM Proxy **is not an official project of React ChatBotify**. With that said, while issues/pull requests are welcome, support for this demo project is **not guaranteed**.
+Note that this project is a fork of the [**LLM Proxy**](https://github.com/tjtanjin/llm-proxy), which is a simpler alternative as a proxy with no support for RAG.
 
 ### Features
 
-LLM Proxy offers the following features:
+React ChatBotify RAG API offers the following features:
 
-**Core Proxy Endpoints:**
-- `/api/v1/openai/chat/completions`: Proxies requests to OpenAI's chat completions API.
-- `/api/v1/gemini/models/:model:generateContent`: Proxies requests to Google Gemini's content generation API.
-- `/api/v1/gemini/models/:model:streamGenerateContent`: Proxies requests to Google Gemini's streaming content generation API.
-- `/api/v1/custom`: A custom endpoint that **always** returns "Hello World!" in a JSON response for basic testing.
+**Query Endpoints:**
+- POST `/api/v1/gemini/models/{model}:generateContent`: Proxies requests to Google Gemini's content generation API.
+- POST `/api/v1/gemini/models/{model}:streamGenerateContent`: Proxies requests to Google Gemini's streaming content generation API.
+
+**Management Endpoints:**
+- POST `/api/v1/rag/manage/documents`: Creates a new document in the RAG system.
+- GET `/api/v1/rag/manage/documents/{documentId}`: Retrieves a document by its ID.
+- PUT `/api/v1/rag/manage/documents/{documentId}`: Updates an existing document.
+- DELETE `/api/v1/rag/manage/documents/{documentId}`: Deletes a document by its ID.
 
 **Retrieval Augmented Generation (RAG) System:**
 - Document Management:
@@ -53,7 +55,7 @@ LLM Proxy offers the following features:
 - `/api/v1/docs`: Interactive Swagger UI for exploring and testing all API endpoints.
 
 ### Technologies
-Technologies used by LLM Proxy are as below:
+Technologies used by React ChatBotify RAG API are as below:
 
 #### Done with:
 
@@ -81,32 +83,30 @@ Docker
 <p align="center">
 ChromaDB
 </p>
-<p align="center">
-  <img height="150" width="150" src="https://huggingface.co/front/assets/huggingface_logo-noborder.svg" />
-</p>
-<p align="center">
-Hugging Face Transformers (via @xenova/transformers.js)
-</p>
 
 #### Project Repository
-- https://github.com/React-ChatBotify/rag-api
+- https://github.com/react-chatbotify/rag-api
 
-### Environment Configuration
-Before running the application, you need to set up your environment variables.
-1.  Copy the `.env.example` file to a new file named `.env`:
+### Setup
+Before running the application, you need to set up your environment variables. Also make sure you have docker installed.
+1.  **Clone the repository:**
     ```bash
-    cp .env.example .env
+    git clone https://github.com/react-chatbotify/rag-api.git
+    cd rag-api
     ```
-2.  Edit the `.env` file and provide the necessary values:
-    *   `PORT`: Port for the application (defaults to 8080).
-    *   `LLM_API_KEY`: Your OpenAI API key (if using OpenAI). (Note: The original template used `GEMINI_API_KEY` and `OPENAI_API_KEY`. This should be updated or clarified based on which keys are actively used by the proxy part).
-    *   `OPENAI_API_KEY`: Your OpenAI API key.
-    *   `GEMINI_API_KEY`: Your Google Gemini API key.
-    *   `RAG_MANAGEMENT_API_KEY`: A secure API key you define for authenticating RAG management endpoints.
-    *   `CHROMA_URL`: The URL for the ChromaDB instance. If using the provided `docker-compose.yml`, this will typically be `http://chromadb:8000`.
-    *   `EMBEDDING_MODEL_NAME`: The name of the sentence transformer model to use for embeddings (e.g., `Xenova/all-MiniLM-L6-v2`). This model will be downloaded on first use.
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+3.  Copy the `.env.template` file (found under the `config/env/` folder) to a new file named `.env`:
+    ```bash
+    cp ./config/env.env.template ./config/env/.env
+    ```
+4.  Edit the `.env` file and provide the necessary values as described in the template.
+5.  Run `npm run start`.
+6.  Visit `http://localhost:${PORT}/api/v1/docs` for the Swagger docs page.
 
-### Docker Deployment (with RAG)
+### Docker Deployment
 The recommended way to deploy the project, including the RAG service and ChromaDB, is using Docker Compose.
 
 1.  **Ensure `.env` is configured:** Follow the steps in "Environment Configuration" above.
@@ -117,143 +117,21 @@ The recommended way to deploy the project, including the RAG service and ChromaD
     This command will:
     *   Build the `rag-api` service image.
     *   Pull the `chromadb/chroma` image for ChromaDB.
-    *   Start both services.
-    *   Create a persistent volume for ChromaDB data (`chroma-data`).
+    *   Pull the `mongodb` image for mongodb.
+    *   Start all services.
+    *   Create a persistent volume for ChromaDB and MongoDB.
 3.  **Accessing the Service:**
-    *   The LLM Proxy will be available at `http://localhost:${PORT}` (e.g., `http://localhost:8080`).
+    *   The RAG API will be available at `http://localhost:${PORT}` (e.g., `http://localhost:8080`).
     *   ChromaDB's API (if needed for direct interaction, though usually not required) will be available at `http://localhost:8001` (as mapped in `docker-compose.yml`).
     *   API documentation (Swagger UI) is available at `http://localhost:${PORT}/api/v1/docs`.
-
-### Development Setup (with RAG)
-If you prefer to run the services separately or manage them manually:
-
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/React-ChatBotify/rag-api.git
-    cd rag-api
-    ```
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
-3.  **Set up `.env` file:** As described in "Environment Configuration".
-4.  **Run ChromaDB:**
-    You can run ChromaDB using Docker separately if you're not using `docker-compose`:
-    ```bash
-    docker run -d -p 8000:8000 --name chromadb -v chroma-data:/chroma/chroma chromadb/chroma
-    ```
-    Ensure your `CHROMA_URL` in `.env` points to `http://localhost:8001` in this case.
-5.  **Run the LLM Proxy application:**
-    ```bash
-    npm run dev
-    ```
-6.  Visit `http://localhost:${PORT}/api/v1/docs` for the Swagger docs page.
-
-### API Endpoints
-
-The LLM Proxy exposes the following sets of API endpoints. All are versioned under `/api/v1/`.
-
-#### Core Proxy Endpoints
-These endpoints proxy requests to external LLM providers.
--   `POST /openai/chat/completions`
--   `POST /gemini/models/:model:generateContent`
--   `POST /gemini/models/:model:streamGenerateContent`
--   `GET /custom` (Returns "Hello World!")
-
-#### RAG API Endpoints
-
-##### Management Endpoints
-These endpoints are used to manage documents in the RAG system. **They are protected and require an `X-API-KEY` header matching the `RAG_MANAGEMENT_API_KEY` defined in your `.env` file.**
-
--   **`POST /rag/manage/documents`**
-    *   Uploads a Markdown document.
-    *   Request Content-Type: `multipart/form-data`.
-    *   Form fields:
-        *   `documentId` (string, required): A unique identifier for the document.
-        *   `markdownFile` (file, required): The `.md` file to upload.
--   **`GET /rag/manage/documents/{documentId}`**
-    *   Retrieves the original content of an uploaded document.
-    *   Path parameter: `documentId`.
--   **`PUT /rag/manage/documents/{documentId}`**
-    *   Updates an existing document by replacing its content.
-    *   Path parameter: `documentId`.
-    *   Request Content-Type: `multipart/form-data`.
-    *   Form field:
-        *   `markdownFile` (file, required): The new `.md` file.
--   **`DELETE /rag/manage/documents/{documentId}`**
-    *   Deletes a document and all its associated chunks from the RAG system.
-    *   Path parameter: `documentId`.
-
-##### Query Endpoint (Public)
-This endpoint is public and used to query the RAG system.
-
--   **`POST /rag/query`**
-    *   Sends a query to the RAG system. The system retrieves relevant document chunks, augments an LLM prompt with their content (specifically, the original parent documents), and returns the LLM's response.
-    *   Request Content-Type: `application/json`.
-    *   Request Body:
-        *   `query` (string, required): The user's query.
-        *   `llm_model` (string, optional): The LLM model to use (e.g., `gpt-3.5-turbo`). Defaults to a system-configured model.
-        *   `n_results` (integer, optional): Number of relevant document chunks to retrieve. Defaults to 3.
-        *   `stream` (boolean, optional): Whether to stream the response. Defaults to `false`.
-    *   Response:
-        *   If `stream: false`: A JSON object containing the LLM's response.
-        *   If `stream: true`: A `text/event-stream` response.
-
-#### API Documentation
--   `GET /docs`: Interactive Swagger UI for all API endpoints. Accessible at `http://localhost:${PORT}/api/v1/docs`.
-
-### Using the RAG API (Examples)
-
-Replace `your_secure_api_key_here` with the value of `RAG_MANAGEMENT_API_KEY` from your `.env` file.
-Replace `/path/to/your/document.md` with the actual path to a Markdown file.
-The default port `8080` is used in these examples.
-
-1.  **Upload a document:**
-    ```bash
-    curl -X POST -H "X-API-KEY: your_secure_api_key_here" \
-         -F "documentId=my_test_doc_01" \
-         -F "markdownFile=@/path/to/your/document.md" \
-         http://localhost:8080/api/v1/rag/manage/documents
-    ```
-
-2.  **Query the RAG system:**
-    ```bash
-    curl -X POST -H "Content-Type: application/json" \
-         -d '{
-               "query": "What is the main content of my_test_doc_01?",
-               "stream": false
-             }' \
-         http://localhost:8080/api/v1/rag/query
-    ```
-    To stream the response:
-    ```bash
-    curl -X POST -H "Content-Type: application/json" \
-         -d '{
-               "query": "Summarize my_test_doc_01 for me.",
-               "stream": true
-             }' \
-         http://localhost:8080/api/v1/rag/query
-    ```
-
-3.  **Get a document's content:**
-    ```bash
-    curl -X GET -H "X-API-KEY: your_secure_api_key_here" \
-         http://localhost:8080/api/v1/rag/manage/documents/my_test_doc_01
-    ```
-
-4.  **Delete a document:**
-    ```bash
-    curl -X DELETE -H "X-API-KEY: your_secure_api_key_here" \
-         http://localhost:8080/api/v1/rag/manage/documents/my_test_doc_01
-    ```
 
 ### Team
 * [Tan Jin](https://github.com/tjtanjin)
 
 ### Contributing
-Given the simplicity and narrowly scoped purpose of this project, there is **no developer guide**. Feel free to submit pull requests if you wish to make improvements or fixes.
+There is currently no developer guide for the project. This will be written soon. In the meantime, if you're keen to make improvements, the codebase is relatively small for exploration.
 
-Alternatively, you may contact me via [**discord**](https://discord.gg/X8VSdZvBQY) or simply raise bugs or suggestions by opening an [**issue**](https://github.com/React-ChatBotify/rag-api/issues).
+Alternatively, you may reach out via [**discord**](https://discord.gg/6R4DK4G5Zh) or simply raise bugs or suggestions by opening an [**issue**](https://github.com/react-chatbotifyy/rag-api/issues).
 
 ### Others
-For any questions regarding the implementation of the project, you may reach out on [**discord**](https://discord.gg/X8VSdZvBQY) or drop an email to: cjtanjin@gmail.com.
+For any questions regarding the implementation of the project, you may reach out on [**discord**](https://discord.gg/6R4DK4G5Zh) or drop an email to: cjtanjin@gmail.com.

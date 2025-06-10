@@ -10,8 +10,8 @@ const swaggerDocument = {
     },
   },
   info: {
-    description: 'API documentation for the LLM Proxy service, including RAG management and query endpoints.',
-    title: 'LLM Proxy API Documentation with RAG',
+    description: 'API documentation for React ChatBotify\'s RAG API service.',
+    title: 'React ChatBotify RAG API Documentation',
     version: '1.0.0',
   },
   openapi: '3.1.0',
