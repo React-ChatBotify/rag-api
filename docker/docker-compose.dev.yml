@@ -2,3 +2,5 @@
 services:
   api:
     image: ${APPLICATION_IMAGE}
+    environment:
+      - NODE_ENV=development

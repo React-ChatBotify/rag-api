@@ -35,7 +35,7 @@ const otelTraceExporter = new OTLPTraceExporter({
 
 // Log Exporter
 const otelLogExporter = new OTLPLogExporter({
-  url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'otel-collectort:4317',
+  url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'otel-collector:4317',
 });
 
 // Logger Provider
