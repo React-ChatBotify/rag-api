@@ -35,7 +35,14 @@ export const generateText = async (
 
   try {
     const geminiModelId = model || config.geminiChatModel || 'gemini-pro';
-    const geminiContents: GeminiContent[] = [{ parts: [{ text: query }], role: 'user' }];
+    let geminiContents: GeminiContent[];
+
+    if (config.geminiSystemPrompt && config.geminiSystemPrompt.trim() !== '') {
+      geminiContents = [{ parts: [{ text: config.geminiSystemPrompt }], role: 'user' }];
+      geminiContents.push({ parts: [{ text: query }], role: 'user' });
+    } else {
+      geminiContents = [{ parts: [{ text: query }], role: 'user' }];
+    }
 
     if (stream) {
       if (!onChunk) {

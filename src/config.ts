@@ -32,6 +32,10 @@ export const config = {
 
   geminiRagType: process.env.GEMINI_RAG_TYPE || 'basic',
 
+  geminiSystemPrompt:
+    process.env.GEMINI_SYSTEM_PROMPT ||
+    'You are a helpful assistant for React ChatBotify, a React library for building flexible and extensible chatbots.',
+
   // Server Configuration
   port: process.env.PORT || 8080,
 
