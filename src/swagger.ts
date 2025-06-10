@@ -10,7 +10,7 @@ const swaggerDocument = {
     },
   },
   info: {
-    description: 'API documentation for React ChatBotify\'s RAG API service.',
+    description: "API documentation for React ChatBotify's RAG API service.",
     title: 'React ChatBotify RAG API Documentation',
     version: '1.0.0',
   },
