@@ -41,6 +41,7 @@ const configModule = require('../../config');
 const mongoService = mongoServiceModule.mongoService;
 const ImportedMockClient = mongoDbModule.MongoClient; // This is our mock constructor
 const config = configModule.config;
+import Logger from '../../logger';
 import type { ParentDocument } from '../mongoService';
 
 describe('MongoService', () => {

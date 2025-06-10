@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 
+import Logger from '../logger';
 import { initializedRagService } from '../services/ragService';
 
 export const createDocument = async (req: Request, res: Response) => {

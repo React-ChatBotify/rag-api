@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 
 import { config } from '../config';
+import Logger from '../logger';
 
 export const apiKeyAuth = (req: Request, res: Response, next: NextFunction) => {
   const apiKey = req.header('X-API-KEY');
