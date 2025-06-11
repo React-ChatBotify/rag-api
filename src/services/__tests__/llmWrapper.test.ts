@@ -97,21 +97,21 @@ describe('LLM Wrapper Service (Gemini-only)', () => {
       mockBatchGenerateContent.mockResolvedValue({
         candidates: [{ content: { parts: [] }, finishReason: 'STOP', index: 0 }],
       } as GeminiChatCompletionResponse);
-      await generateText({ model: customModel, contents: mockSingleContent });
+      await generateText({ contents: mockSingleContent, model: customModel });
       expect(mockBatchGenerateContent).toHaveBeenCalledWith(customModel, mockSingleContent);
     });
 
     it('should use provided model for generateText (streaming)', async () => {
       const customModel = 'gemini-custom-stream-model-test';
       mockStreamGenerateContent.mockImplementation(async () => {});
-      await generateText({ model: customModel, contents: mockSingleContent, onChunk: jest.fn(), stream: true });
+      await generateText({ contents: mockSingleContent, model: customModel, onChunk: jest.fn(), stream: true });
       expect(mockStreamGenerateContent).toHaveBeenCalledWith(customModel, mockSingleContent, expect.any(Function));
     });
 
     it('should throw error if contents are empty for generateText', async () => {
       await expect(generateText({ contents: [] })).rejects.toThrow('Contents are required for text generation.');
     });
-    
+
     it('should throw error if contents array is missing for generateText', async () => {
       // @ts-expect-error testing invalid input
       await expect(generateText({ contents: null })).rejects.toThrow('Contents are required for text generation.');
@@ -132,10 +132,10 @@ describe('LLM Wrapper Service (Gemini-only)', () => {
         mockBatchGenerateContent.mockResolvedValue({} as GeminiChatCompletionResponse); // Minimal mock
 
         await generateText({ contents: mockSingleContent });
-        expect(mockBatchGenerateContent).toHaveBeenCalledWith(
-          config.geminiChatModel,
-          [expectedSystemPromptContent, ...mockSingleContent]
-        );
+        expect(mockBatchGenerateContent).toHaveBeenCalledWith(config.geminiChatModel, [
+          expectedSystemPromptContent,
+          ...mockSingleContent,
+        ]);
       });
 
       it('should prepend system prompt if config.geminiSystemPrompt is defined (stream)', async () => {
@@ -159,26 +159,26 @@ describe('LLM Wrapper Service (Gemini-only)', () => {
       });
 
       it('should NOT prepend system prompt if config.geminiSystemPrompt is undefined (batch)', async () => {
-        configSpy = jest.spyOn(config, 'geminiSystemPrompt', 'get').mockReturnValue("");
+        configSpy = jest.spyOn(config, 'geminiSystemPrompt', 'get').mockReturnValue('');
         mockBatchGenerateContent.mockResolvedValue({} as GeminiChatCompletionResponse);
 
         await generateText({ contents: mockSingleContent });
         expect(mockBatchGenerateContent).toHaveBeenCalledWith(config.geminiChatModel, mockSingleContent);
       });
-      
+
       it('should correctly pass multiple content items with system prompt (batch)', async () => {
         configSpy = jest.spyOn(config, 'geminiSystemPrompt', 'get').mockReturnValue(systemPromptText);
         mockBatchGenerateContent.mockResolvedValue({} as GeminiChatCompletionResponse);
 
         await generateText({ contents: mockMultipleContents });
-        expect(mockBatchGenerateContent).toHaveBeenCalledWith(
-          config.geminiChatModel,
-          [expectedSystemPromptContent, ...mockMultipleContents]
-        );
+        expect(mockBatchGenerateContent).toHaveBeenCalledWith(config.geminiChatModel, [
+          expectedSystemPromptContent,
+          ...mockMultipleContents,
+        ]);
       });
 
       it('should correctly pass multiple content items without system prompt (batch)', async () => {
-        configSpy = jest.spyOn(config, 'geminiSystemPrompt', 'get').mockReturnValue("");
+        configSpy = jest.spyOn(config, 'geminiSystemPrompt', 'get').mockReturnValue('');
         mockBatchGenerateContent.mockResolvedValue({} as GeminiChatCompletionResponse);
 
         await generateText({ contents: mockMultipleContents });
