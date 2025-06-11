@@ -39,10 +39,10 @@ export const config = {
   // Server Configuration
   port: process.env.PORT || 8080,
 
+  ragConversationWindowSize: parseInt(process.env.RAG_CONVERSATION_WINDOW_SIZE || '', 10) || 1,
+
   // RAG Management API Key (protects management endpoints)
   ragManagementApiKey: process.env.RAG_MANAGEMENT_API_KEY!,
 
   ragQueryApiKey: process.env.RAG_QUERY_API_KEY!,
-
-  ragConversationWindowSize: parseInt(process.env.RAG_CONVERSATION_WINDOW_SIZE || '', 10) || 1,
 };

@@ -128,8 +128,8 @@ export const handleGeminiBatch = async (req: Request, res: Response) => {
 
     try {
       const llmResponse = (await generateText({
-        model: model,
-        contents: contentsForLlm, // Pass the (potentially RAG-augmented) GeminiContent[]
+        contents: contentsForLlm,
+        model: model, // Pass the (potentially RAG-augmented) GeminiContent[]
         stream: false,
       })) as LLMChatResponse;
       res.status(200).json(llmResponse);
@@ -298,11 +298,11 @@ export const handleGeminiStream = async (req: Request, res: Response) => {
 
     try {
       await generateText({
+        contents: contentsForLlm,
         model: model,
         onChunk: (rawSseLine: string) => {
           res.write(`${rawSseLine}\n`);
-        },
-        contents: contentsForLlm, // Pass the (potentially RAG-augmented) GeminiContent[]
+        }, // Pass the (potentially RAG-augmented) GeminiContent[]
         stream: true,
       });
       res.end();
