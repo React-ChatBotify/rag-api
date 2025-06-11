@@ -4,50 +4,81 @@ import { config } from '../config';
 import Logger from '../logger';
 import { generateText } from '../services/llmWrapper';
 import { initializedRagService } from '../services/ragService';
-import { GeminiQueryRequest, LLMChatResponse } from '../types';
+import { GeminiContent, GeminiQueryRequest, LLMChatResponse } from '../types';
 
 export const handleGeminiBatch = async (req: Request, res: Response) => {
   const model = req.params.model;
-  let userQuery = ''; // Define userQuery here to be accessible in the catch block
+  let userQueryForRAG = ''; // For RAG and general query representation
 
   try {
     const { contents } = req.body as GeminiQueryRequest;
 
-    // Validate contents structure
+    // Initial structural validation (can be enhanced to check all items)
     if (
       !contents ||
       !Array.isArray(contents) ||
       contents.length === 0 ||
-      !contents[0].parts ||
-      !Array.isArray(contents[0].parts) ||
-      contents[0].parts.length === 0 ||
-      !contents[0].parts[0].text ||
-      typeof contents[0].parts[0].text !== 'string' ||
-      contents[0].parts[0].text.trim() === ''
+      !contents.every(
+        (item) =>
+          item.parts &&
+          Array.isArray(item.parts) &&
+          item.parts.length > 0 &&
+          item.parts.every((part) => part.text && typeof part.text === 'string')
+      )
     ) {
       return res.status(400).json({
         error:
-          'Bad Request: contents is required and must be an array with at least one part containing a non-empty text string.',
+          'Bad Request: contents is required and must be an array of content items, each with at least one part containing a non-empty text string.',
       });
     }
-    userQuery = contents[0].parts[0].text; // Assign userQuery after validation
+
+    // Create userQueryForRAG from all parts of all content items
+    if (contents && Array.isArray(contents)) {
+      let messagesToConsider = contents;
+      const windowSize = config.ragConversationWindowSize;
+
+      if (windowSize && windowSize > 0 && windowSize < contents.length) {
+        messagesToConsider = contents.slice(-windowSize); // Get the last N messages
+        Logger.info(`RAG windowing: Using last ${windowSize} of ${contents.length} messages for RAG query.`);
+      } else if (windowSize && windowSize > 0 && windowSize >= contents.length) {
+        Logger.info(
+          `RAG windowing: Window size ${windowSize} is >= total messages ${contents.length}. Using all messages for RAG query.`
+        );
+        // messagesToConsider remains 'contents'
+      } else {
+        // windowSize is 0 or not set
+        Logger.info(`RAG windowing: Window size is 0 or not set. Using all ${contents.length} messages for RAG query.`);
+        // messagesToConsider remains 'contents'
+      }
+
+      userQueryForRAG = messagesToConsider
+        .flatMap((contentItem) => contentItem.parts.map((part) => part.text))
+        .join('\n');
+    }
+    // userQueryForErrorLogging removed
+
+    // Validate that the consolidated query is not empty
+    if (userQueryForRAG.trim() === '') {
+      return res.status(400).json({ error: 'Bad Request: Consolidated text from contents is empty.' });
+    }
 
     const rag_type = config.geminiRagType;
     const numberOfResults = config.geminiNResults;
 
     Logger.info(
-      `INFO: Gemini Batch Request. Model: ${model}. RAG Type (from config): ${rag_type}. N Results (from config): ${numberOfResults}.`
+      `INFO: Gemini Batch Request. Model: ${model}. RAG Type (from config): ${rag_type}. N Results (from config): ${numberOfResults}. Consolidated user query for RAG (first 100 chars): "${userQueryForRAG.substring(0, 100)}..."`
     );
 
     const ragService = await initializedRagService;
-    const chunks = await ragService.queryChunks(userQuery, numberOfResults);
+    const chunks = await ragService.queryChunks(userQueryForRAG, numberOfResults);
 
-    let augmentedPrompt: string;
+    let contentsForLlm = JSON.parse(JSON.stringify(contents)) as GeminiContent[]; // Deep copy
+
     if (!chunks || chunks.length === 0) {
-      console.warn(
-        `No relevant chunks found for query: "${userQuery}" with model ${model}. Querying LLM directly without RAG context.`
+      Logger.warn(
+        `No relevant chunks found for query (first 100 chars): "${userQueryForRAG.substring(0, 100)}..." with model ${model}. Querying LLM directly without RAG context.`
       );
-      augmentedPrompt = userQuery;
+      // contentsForLlm remains as is (original user contents)
     } else {
       let contextContent: string[] = [];
       if (rag_type === 'advanced') {
@@ -72,24 +103,33 @@ export const handleGeminiBatch = async (req: Request, res: Response) => {
       }
 
       if (contextContent.length === 0) {
-        console.warn(
-          `Chunks were found for query "${userQuery}" (RAG Type from config: ${rag_type}, model: ${model}), but no relevant content could be extracted. Querying LLM directly.`
+        Logger.warn(
+          `Chunks were found for query (first 100 chars): "${userQueryForRAG.substring(0, 100)}..." (RAG Type from config: ${rag_type}, model: ${model}), but no relevant content could be extracted. Querying LLM directly.`
         );
-        augmentedPrompt = userQuery;
+        // contentsForLlm remains as is
       } else {
         const context = contextContent.join('\n---\n');
         const contextDescription =
           rag_type === 'advanced' ? 'Relevant Information from Parent Documents' : 'Relevant Text Chunks';
-        augmentedPrompt = `User Query: ${userQuery}\n\n${contextDescription}:\n---\n${context}\n---\nBased on the relevant information above, answer the user query.`;
+        const ragAugmentationPrefix = `Based on the relevant information below, answer the user query.\n${contextDescription}:\n---\n${context}\n---\nConsidering the above context and the conversation history, here is the latest user message: `;
+
+        const lastContentItem = contentsForLlm[contentsForLlm.length - 1];
+        if (lastContentItem && lastContentItem.parts && lastContentItem.parts.length > 0) {
+          lastContentItem.parts[0].text = ragAugmentationPrefix + lastContentItem.parts[0].text;
+        } else {
+          Logger.warn(
+            'Last content item for RAG augmentation is malformed or missing parts. RAG context might not be prepended as expected.'
+          );
+          // Fallback: if the last message is weird, but we have context, maybe put context in its own message?
+          // For now, the original plan is to modify the last message. If it's malformed, it won't be modified.
+        }
       }
     }
-
-    // Logger.info(`INFO: Gemini Batch Request. Model: ${model}. RAG Type: ${rag_type}.`); // Already logged above with more details
 
     try {
       const llmResponse = (await generateText({
         model: model,
-        query: augmentedPrompt,
+        contents: contentsForLlm, // Pass the (potentially RAG-augmented) GeminiContent[]
         stream: false,
       })) as LLMChatResponse;
       res.status(200).json(llmResponse);
@@ -100,7 +140,10 @@ export const handleGeminiBatch = async (req: Request, res: Response) => {
         .json({ details: llmError.message, error: `Failed to get response from LLM provider Gemini.` });
     }
   } catch (error: any) {
-    Logger.error(`Error in handleGeminiBatch for model ${model}, query "${userQuery}":`, error); // Use userQuery for logging
+    Logger.error(
+      `Error in handleGeminiBatch for model ${model}, consolidated query (first 100 chars): "${userQueryForRAG.substring(0, 100)}":`,
+      error
+    );
     if (error.message && error.message.includes('ChromaDB collection is not initialized')) {
       return res.status(503).json({ error: 'Service Unavailable: RAG service is not ready.' });
     }
@@ -113,7 +156,7 @@ export const handleGeminiBatch = async (req: Request, res: Response) => {
 
 export const handleGeminiStream = async (req: Request, res: Response) => {
   const model = req.params.model;
-  let userQuery = ''; // Define userQuery here to be accessible in the catch block
+  let userQueryForRAG = ''; // For RAG and general query representation
 
   try {
     const { contents } = req.body as GeminiQueryRequest;
@@ -121,57 +164,93 @@ export const handleGeminiStream = async (req: Request, res: Response) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    // res.flushHeaders(); // Flush headers after initial validation
 
-    // Validate contents structure
+    // Initial structural validation (can be enhanced to check all items)
     if (
       !contents ||
       !Array.isArray(contents) ||
       contents.length === 0 ||
-      !contents[0].parts ||
-      !Array.isArray(contents[0].parts) ||
-      contents[0].parts.length === 0 ||
-      !contents[0].parts[0].text ||
-      typeof contents[0].parts[0].text !== 'string' ||
-      contents[0].parts[0].text.trim() === ''
+      !contents.every(
+        (item) =>
+          item.parts &&
+          Array.isArray(item.parts) &&
+          item.parts.length > 0 &&
+          item.parts.every((part) => part.text && typeof part.text === 'string')
+      )
     ) {
-      // If headers not sent, can send 400
       if (!res.headersSent) {
         return res.status(400).json({
           error:
-            'Bad Request: contents is required and must be an array with at least one part containing a non-empty text string.',
+            'Bad Request: contents is required and must be an array of content items, each with at least one part containing a non-empty text string.',
         });
       } else {
-        // Headers sent, write error to stream
         res.write(
           `data: ${JSON.stringify({
             error:
-              'Bad Request: contents is required and must be an array with at least one part containing a non-empty text string.',
+              'Bad Request: contents is required and must be an array of content items, each with at least one part containing a non-empty text string.',
           })}\n\n`
         );
         res.end();
         return;
       }
     }
-    userQuery = contents[0].parts[0].text; // Assign userQuery after validation
-    res.flushHeaders(); // Send headers now that initial validation passed
+
+    // Create userQueryForRAG from all parts of all content items
+    if (contents && Array.isArray(contents)) {
+      let messagesToConsider = contents;
+      const windowSize = config.ragConversationWindowSize;
+
+      if (windowSize && windowSize > 0 && windowSize < contents.length) {
+        messagesToConsider = contents.slice(-windowSize); // Get the last N messages
+        Logger.info(`RAG windowing: Using last ${windowSize} of ${contents.length} messages for RAG query (stream).`);
+      } else if (windowSize && windowSize > 0 && windowSize >= contents.length) {
+        Logger.info(
+          `RAG windowing: Window size ${windowSize} is >= total messages ${contents.length}. Using all messages for RAG query (stream).`
+        );
+        // messagesToConsider remains 'contents'
+      } else {
+        // windowSize is 0 or not set
+        Logger.info(
+          `RAG windowing: Window size is 0 or not set. Using all ${contents.length} messages for RAG query (stream).`
+        );
+        // messagesToConsider remains 'contents'
+      }
+
+      userQueryForRAG = messagesToConsider
+        .flatMap((contentItem) => contentItem.parts.map((part) => part.text))
+        .join('\n');
+    }
+    // userQueryForErrorLogging removed
+
+    // Validate that the consolidated query is not empty
+    if (userQueryForRAG.trim() === '') {
+      if (!res.headersSent) {
+        return res.status(400).json({ error: 'Bad Request: Consolidated text from contents is empty.' });
+      } else {
+        res.write(`data: ${JSON.stringify({ error: 'Bad Request: Consolidated text from contents is empty.' })}\n\n`);
+        res.end();
+        return;
+      }
+    }
+    res.flushHeaders(); // Send headers now that validation passed
 
     const rag_type = config.geminiRagType;
     const numberOfResults = config.geminiNResults;
 
     Logger.info(
-      `INFO: Gemini Stream Request. Model: ${model}. RAG Type (from config): ${rag_type}. N Results (from config): ${numberOfResults}.`
+      `INFO: Gemini Stream Request. Model: ${model}. RAG Type (from config): ${rag_type}. N Results (from config): ${numberOfResults}. Consolidated user query for RAG (first 100 chars): "${userQueryForRAG.substring(0, 100)}..."`
     );
 
     const ragService = await initializedRagService;
-    const chunks = await ragService.queryChunks(userQuery, numberOfResults);
+    const chunks = await ragService.queryChunks(userQueryForRAG, numberOfResults);
 
-    let augmentedPrompt: string;
+    let contentsForLlm = JSON.parse(JSON.stringify(contents)) as GeminiContent[]; // Deep copy
+
     if (!chunks || chunks.length === 0) {
-      console.warn(
-        `No relevant chunks found for query: "${userQuery}" with model ${model} (stream). Querying LLM directly without RAG context.`
+      Logger.warn(
+        `No relevant chunks found for query (first 100 chars): "${userQueryForRAG.substring(0, 100)}..." with model ${model} (stream). Querying LLM directly without RAG context.`
       );
-      augmentedPrompt = userQuery;
+      // contentsForLlm remains as is
     } else {
       let contextContent: string[] = [];
       if (rag_type === 'advanced') {
@@ -196,36 +275,40 @@ export const handleGeminiStream = async (req: Request, res: Response) => {
       }
 
       if (contextContent.length === 0) {
-        console.warn(
-          `Chunks were found for query "${userQuery}" (RAG Type from config: ${rag_type}, model: ${model}, stream), but no relevant content could be extracted. Querying LLM directly.`
+        Logger.warn(
+          `Chunks were found for query (first 100 chars): "${userQueryForRAG.substring(0, 100)}..." (RAG Type from config: ${rag_type}, model: ${model}, stream), but no relevant content could be extracted. Querying LLM directly.`
         );
-        augmentedPrompt = userQuery;
+        // contentsForLlm remains as is
       } else {
         const context = contextContent.join('\n---\n');
         const contextDescription =
           rag_type === 'advanced' ? 'Relevant Information from Parent Documents' : 'Relevant Text Chunks';
-        augmentedPrompt = `User Query: ${userQuery}\n\n${contextDescription}:\n---\n${context}\n---\nBased on the relevant information above, answer the user query.`;
+        const ragAugmentationPrefix = `Based on the relevant information below, answer the user query.\n${contextDescription}:\n---\n${context}\n---\nConsidering the above context and the conversation history, here is the latest user message: `;
+
+        const lastContentItem = contentsForLlm[contentsForLlm.length - 1];
+        if (lastContentItem && lastContentItem.parts && lastContentItem.parts.length > 0) {
+          lastContentItem.parts[0].text = ragAugmentationPrefix + lastContentItem.parts[0].text;
+        } else {
+          Logger.warn(
+            'Last content item for RAG augmentation is malformed or missing parts (stream). RAG context might not be prepended as expected.'
+          );
+        }
       }
     }
-
-    // Logger.info(`INFO: Gemini Stream Request. Model: ${model}. RAG Type: ${rag_type}.`); // Already logged above
 
     try {
       await generateText({
         model: model,
-        // The onChunk callback now receives a raw SSE line string from llmWrapper.ts
         onChunk: (rawSseLine: string) => {
-          // Pass the raw SSE line, followed by a single newline, as per SSE spec.
           res.write(`${rawSseLine}\n`);
         },
-        query: augmentedPrompt,
+        contents: contentsForLlm, // Pass the (potentially RAG-augmented) GeminiContent[]
         stream: true,
       });
       res.end();
     } catch (llmError: any) {
       Logger.error(`Error calling llmWrapper for Gemini stream (model: ${model}):`, llmError);
       if (!res.writableEnded) {
-        // Check if stream is still open
         res.write(
           `data: ${JSON.stringify({ details: llmError.message, error: `Failed to get response from LLM provider Gemini.` })}\n\n`
         );
@@ -233,10 +316,11 @@ export const handleGeminiStream = async (req: Request, res: Response) => {
       }
     }
   } catch (error: any) {
-    Logger.error(`Error in handleGeminiStream for model ${model}, query "${userQuery}":`, error); // Use userQuery for logging
+    Logger.error(
+      `Error in handleGeminiStream for model ${model}, consolidated query (first 100 chars): "${userQueryForRAG.substring(0, 100)}":`,
+      error
+    );
     if (!res.headersSent) {
-      // This case should ideally not be reached if query validation is first.
-      // However, for other early errors (like RAG service init), this is a fallback.
       if (error.message && error.message.includes('ChromaDB collection is not initialized')) {
         res.status(503).json({ error: 'Service Unavailable: RAG service is not ready.' });
         return;
@@ -247,7 +331,6 @@ export const handleGeminiStream = async (req: Request, res: Response) => {
       }
       res.status(500).json({ details: error.message, error: 'Internal Server Error' });
     } else if (!res.writableEnded) {
-      // Headers sent, stream is open, write error to stream
       let errorMessage = 'Internal Server Error';
       if (error.message && error.message.includes('ChromaDB collection is not initialized')) {
         errorMessage = 'Service Unavailable: RAG service is not ready.';
@@ -257,6 +340,5 @@ export const handleGeminiStream = async (req: Request, res: Response) => {
       res.write(`data: ${JSON.stringify({ details: error.message, error: errorMessage })}\n\n`);
       res.end();
     }
-    // If res.writableEnded is true, can't do anything more.
   }
 };

@@ -4,7 +4,7 @@ import * as Gemini from './gemini';
 
 export type LLMChatRequestOptions = {
   // provider field removed
-  query: string;
+  contents: Gemini.GeminiContent[];
   stream?: boolean;
   model?: string; // Optional model override
   onChunk?: (rawSseLine: string) => void; // For streaming, expects a raw SSE line string

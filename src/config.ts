@@ -43,4 +43,6 @@ export const config = {
   ragManagementApiKey: process.env.RAG_MANAGEMENT_API_KEY!,
 
   ragQueryApiKey: process.env.RAG_QUERY_API_KEY!,
+
+  ragConversationWindowSize: parseInt(process.env.RAG_CONVERSATION_WINDOW_SIZE || '', 10) || 1,
 };

@@ -27,21 +27,19 @@ const ensureGeminiModelPrefixed = (modelId: string): string => {
 export const generateText = async (
   options: Omit<LLMChatRequestOptions, 'provider'>
 ): Promise<LLMChatResponse | void> => {
-  const { query, stream, model, onChunk } = options;
+  const { contents, stream, model, onChunk } = options;
 
-  if (!query) {
-    throw new Error('Query is required for text generation.');
+  if (!contents || contents.length === 0) {
+    throw new Error('Contents are required for text generation.');
   }
 
   try {
     const geminiModelId = model || config.geminiChatModel || 'gemini-pro';
-    let geminiContents: GeminiContent[];
+    let finalContents = contents;
 
     if (config.geminiSystemPrompt && config.geminiSystemPrompt.trim() !== '') {
-      geminiContents = [{ parts: [{ text: config.geminiSystemPrompt }], role: 'user' }];
-      geminiContents.push({ parts: [{ text: query }], role: 'user' });
-    } else {
-      geminiContents = [{ parts: [{ text: query }], role: 'user' }];
+      const systemPromptContent: GeminiContent = { parts: [{ text: config.geminiSystemPrompt }], role: 'user' };
+      finalContents = [systemPromptContent, ...contents];
     }
 
     if (stream) {
@@ -52,10 +50,10 @@ export const generateText = async (
       // The onChunk from LLMChatRequestOptions (options.onChunk) will also expect raw SSE lines
       // (this type will be updated in a subsequent step in types.ts).
       // Therefore, we can pass options.onChunk directly.
-      await streamGeminiGenerate(geminiModelId as GeminiModelName, geminiContents, onChunk);
+      await streamGeminiGenerate(geminiModelId as GeminiModelName, finalContents, onChunk);
       return;
     } else {
-      const response = await batchGeminiGenerate(geminiModelId as GeminiModelName, geminiContents);
+      const response = await batchGeminiGenerate(geminiModelId as GeminiModelName, finalContents);
       // LLMChatResponse is now GeminiChatCompletionResponse, return directly.
       return response;
     }
