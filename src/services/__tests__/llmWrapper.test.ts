@@ -31,20 +31,29 @@ jest.mock('../../config', () => ({
 }));
 
 describe('LLM Wrapper Service (Gemini-only)', () => {
-  const mockQuery = 'Test query';
+  const mockSingleContent: GeminiContent[] = [{ parts: [{ text: 'Test query' }], role: 'user' }];
+  const mockMultipleContents: GeminiContent[] = [
+    { parts: [{ text: 'Hello' }], role: 'user' },
+    { parts: [{ text: 'How are you?' }], role: 'model' },
+    { parts: [{ text: 'I am fine, thank you!' }], role: 'user' },
+  ];
   const mockText = 'Test text for embedding';
   const mockTexts = ['Test text 1', 'Test text 2'];
+  let configSpy: jest.SpyInstance;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Reset any spies if they are setup in a way that persists across tests in this describe block
+    if (configSpy) {
+      configSpy.mockRestore();
+    }
   });
 
   describe('generateText', () => {
-    it('should call batchGenerateContent for non-streaming requests and return correct structure', async () => {
+    it('should call batchGenerateContent for non-streaming requests with single content item', async () => {
       const mockApiResponse: GeminiChatCompletionResponse = {
         candidates: [
           {
-            // Added index
             content: { parts: [{ text: 'Gemini response' }], role: 'model' },
             finishReason: 'STOP',
             index: 0,
@@ -53,35 +62,33 @@ describe('LLM Wrapper Service (Gemini-only)', () => {
       };
       mockBatchGenerateContent.mockResolvedValue(mockApiResponse);
 
-      const result = (await generateText({ query: mockQuery })) as LLMChatResponse;
-      const expectedContents: GeminiContent[] = [{ parts: [{ text: mockQuery }], role: 'user' }];
+      const result = (await generateText({ contents: mockSingleContent })) as LLMChatResponse;
 
-      expect(mockBatchGenerateContent).toHaveBeenCalledWith(config.geminiChatModel, expectedContents);
+      expect(mockBatchGenerateContent).toHaveBeenCalledWith(config.geminiChatModel, mockSingleContent);
       expect(result).toEqual(mockApiResponse);
     });
 
-    it('should call streamGenerateContent and trigger onChunk for streaming requests', async () => {
+    it('should call streamGenerateContent and trigger onChunk for streaming requests with single content item', async () => {
       const mockOnChunk = jest.fn();
       const mockChunk = {
-        candidates: [{ content: { parts: [{ text: 'Hello' }], role: 'model' }, index: 0 }], // Added index
+        candidates: [{ content: { parts: [{ text: 'Hello' }], role: 'model' }, index: 0 }],
       };
 
       mockStreamGenerateContent.mockImplementation(async (modelId, contents, onChunkCallback) => {
         if (onChunkCallback) {
-          onChunkCallback(mockChunk);
+          onChunkCallback(mockChunk); // Pass the raw chunk as per current design
         }
         return Promise.resolve();
       });
-      const expectedContents: GeminiContent[] = [{ parts: [{ text: mockQuery }], role: 'user' }];
 
-      const result = await generateText({ onChunk: mockOnChunk, query: mockQuery, stream: true });
+      const result = await generateText({ contents: mockSingleContent, onChunk: mockOnChunk, stream: true });
 
       expect(mockStreamGenerateContent).toHaveBeenCalledWith(
         config.geminiChatModel,
-        expectedContents,
+        mockSingleContent,
         expect.any(Function)
       );
-      expect(mockOnChunk).toHaveBeenCalledWith(mockChunk);
+      expect(mockOnChunk).toHaveBeenCalledWith(mockChunk); // onChunk should receive the raw chunk
       expect(result).toBeUndefined();
     });
 
@@ -89,26 +96,106 @@ describe('LLM Wrapper Service (Gemini-only)', () => {
       const customModel = 'gemini-custom-model-test';
       mockBatchGenerateContent.mockResolvedValue({
         candidates: [{ content: { parts: [] }, finishReason: 'STOP', index: 0 }],
-      } as GeminiChatCompletionResponse); // Ensure mock response is valid
-      await generateText({ model: customModel, query: mockQuery });
-      expect(mockBatchGenerateContent).toHaveBeenCalledWith(customModel, expect.any(Array));
+      } as GeminiChatCompletionResponse);
+      await generateText({ model: customModel, contents: mockSingleContent });
+      expect(mockBatchGenerateContent).toHaveBeenCalledWith(customModel, mockSingleContent);
     });
 
     it('should use provided model for generateText (streaming)', async () => {
       const customModel = 'gemini-custom-stream-model-test';
       mockStreamGenerateContent.mockImplementation(async () => {});
-      await generateText({ model: customModel, onChunk: jest.fn(), query: mockQuery, stream: true });
-      expect(mockStreamGenerateContent).toHaveBeenCalledWith(customModel, expect.any(Array), expect.any(Function));
+      await generateText({ model: customModel, contents: mockSingleContent, onChunk: jest.fn(), stream: true });
+      expect(mockStreamGenerateContent).toHaveBeenCalledWith(customModel, mockSingleContent, expect.any(Function));
     });
 
-    it('should throw error if query is missing for generateText', async () => {
-      await expect(generateText({ query: '' })).rejects.toThrow('Query is required for text generation.');
+    it('should throw error if contents are empty for generateText', async () => {
+      await expect(generateText({ contents: [] })).rejects.toThrow('Contents are required for text generation.');
+    });
+    
+    it('should throw error if contents array is missing for generateText', async () => {
+      // @ts-expect-error testing invalid input
+      await expect(generateText({ contents: null })).rejects.toThrow('Contents are required for text generation.');
     });
 
     it('should throw error if stream is true but onChunk is missing', async () => {
-      await expect(generateText({ query: mockQuery, stream: true })).rejects.toThrow(
+      await expect(generateText({ contents: mockSingleContent, stream: true })).rejects.toThrow(
         'onChunk callback is required for streaming responses.'
       );
+    });
+
+    describe('System Prompt Integration', () => {
+      const systemPromptText = 'You are a helpful assistant.';
+      const expectedSystemPromptContent: GeminiContent = { parts: [{ text: systemPromptText }], role: 'user' };
+
+      it('should prepend system prompt if config.geminiSystemPrompt is defined (batch)', async () => {
+        configSpy = jest.spyOn(config, 'geminiSystemPrompt', 'get').mockReturnValue(systemPromptText);
+        mockBatchGenerateContent.mockResolvedValue({} as GeminiChatCompletionResponse); // Minimal mock
+
+        await generateText({ contents: mockSingleContent });
+        expect(mockBatchGenerateContent).toHaveBeenCalledWith(
+          config.geminiChatModel,
+          [expectedSystemPromptContent, ...mockSingleContent]
+        );
+      });
+
+      it('should prepend system prompt if config.geminiSystemPrompt is defined (stream)', async () => {
+        configSpy = jest.spyOn(config, 'geminiSystemPrompt', 'get').mockReturnValue(systemPromptText);
+        mockStreamGenerateContent.mockImplementation(async () => {});
+
+        await generateText({ contents: mockSingleContent, onChunk: jest.fn(), stream: true });
+        expect(mockStreamGenerateContent).toHaveBeenCalledWith(
+          config.geminiChatModel,
+          [expectedSystemPromptContent, ...mockSingleContent],
+          expect.any(Function)
+        );
+      });
+
+      it('should NOT prepend system prompt if config.geminiSystemPrompt is empty (batch)', async () => {
+        configSpy = jest.spyOn(config, 'geminiSystemPrompt', 'get').mockReturnValue('');
+        mockBatchGenerateContent.mockResolvedValue({} as GeminiChatCompletionResponse);
+
+        await generateText({ contents: mockSingleContent });
+        expect(mockBatchGenerateContent).toHaveBeenCalledWith(config.geminiChatModel, mockSingleContent);
+      });
+
+      it('should NOT prepend system prompt if config.geminiSystemPrompt is undefined (batch)', async () => {
+        configSpy = jest.spyOn(config, 'geminiSystemPrompt', 'get').mockReturnValue("");
+        mockBatchGenerateContent.mockResolvedValue({} as GeminiChatCompletionResponse);
+
+        await generateText({ contents: mockSingleContent });
+        expect(mockBatchGenerateContent).toHaveBeenCalledWith(config.geminiChatModel, mockSingleContent);
+      });
+      
+      it('should correctly pass multiple content items with system prompt (batch)', async () => {
+        configSpy = jest.spyOn(config, 'geminiSystemPrompt', 'get').mockReturnValue(systemPromptText);
+        mockBatchGenerateContent.mockResolvedValue({} as GeminiChatCompletionResponse);
+
+        await generateText({ contents: mockMultipleContents });
+        expect(mockBatchGenerateContent).toHaveBeenCalledWith(
+          config.geminiChatModel,
+          [expectedSystemPromptContent, ...mockMultipleContents]
+        );
+      });
+
+      it('should correctly pass multiple content items without system prompt (batch)', async () => {
+        configSpy = jest.spyOn(config, 'geminiSystemPrompt', 'get').mockReturnValue("");
+        mockBatchGenerateContent.mockResolvedValue({} as GeminiChatCompletionResponse);
+
+        await generateText({ contents: mockMultipleContents });
+        expect(mockBatchGenerateContent).toHaveBeenCalledWith(config.geminiChatModel, mockMultipleContents);
+      });
+
+      it('should correctly pass multiple content items with system prompt (stream)', async () => {
+        configSpy = jest.spyOn(config, 'geminiSystemPrompt', 'get').mockReturnValue(systemPromptText);
+        mockStreamGenerateContent.mockImplementation(async () => {});
+
+        await generateText({ contents: mockMultipleContents, onChunk: jest.fn(), stream: true });
+        expect(mockStreamGenerateContent).toHaveBeenCalledWith(
+          config.geminiChatModel,
+          [expectedSystemPromptContent, ...mockMultipleContents],
+          expect.any(Function)
+        );
+      });
     });
   });
 
