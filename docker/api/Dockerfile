@@ -47,4 +47,4 @@ COPY --from=build /app/node_modules ./node_modules
 COPY ./package.json ./
 
 # Start the application
-CMD ["node", "./build/index.js"]
+CMD ["node", "./build/api/index.js"]
