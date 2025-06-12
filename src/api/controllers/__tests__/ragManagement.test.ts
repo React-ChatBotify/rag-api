@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 
 import { initializedRagService } from '../../services/ragService';
-import { createDocument, deleteDocument, getDocument, updateDocument } from '../ragManagement'; // Adjust path as needed
+import { createDocument, deleteDocument, getDocument, getAllDocuments, updateDocument } from '../ragManagement'; // Adjust path as needed
 
 // Mock the initializedRagService
 jest.mock('../../services/ragService', () => ({
@@ -10,6 +10,7 @@ jest.mock('../../services/ragService', () => ({
     deleteDocument: jest.fn(),
     getParentDocumentContent: jest.fn(),
     updateDocument: jest.fn(),
+    getAllDocumentIds: jest.fn(), // Added mock for getAllDocumentIds
     // Add other methods if they are called and need mocking, e.g. documentExists
   }),
 }));
@@ -211,6 +212,57 @@ describe('RAG Management Controllers', () => {
 
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({ details: 'Service error', error: 'Internal Server Error' });
+    });
+  });
+
+  describe('getAllDocuments', () => {
+    it('should return 200 and all document IDs', async () => {
+      const req = mockRequest() as Request;
+      const res = mockResponse() as Response;
+      const expectedIds = ['id1', 'id2'];
+      mockRagService.getAllDocumentIds.mockResolvedValue(expectedIds);
+
+      await getAllDocuments(req, res);
+
+      expect(mockRagService.getAllDocumentIds).toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({ documentIds: expectedIds });
+    });
+
+    it('should return 200 and an empty array if no documents exist', async () => {
+      const req = mockRequest() as Request;
+      const res = mockResponse() as Response;
+      mockRagService.getAllDocumentIds.mockResolvedValue([]);
+
+      await getAllDocuments(req, res);
+
+      expect(mockRagService.getAllDocumentIds).toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({ documentIds: [] });
+    });
+
+    it('should return 503 if RAG service is not ready', async () => {
+      const req = mockRequest() as Request;
+      const res = mockResponse() as Response;
+      mockRagService.getAllDocumentIds.mockRejectedValue(new Error('ChromaDB collection is not initialized'));
+
+      await getAllDocuments(req, res);
+
+      expect(mockRagService.getAllDocumentIds).toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.json).toHaveBeenCalledWith({ error: 'Service Unavailable: RAG service is not ready.' });
+    });
+
+    it('should return 500 for other errors', async () => {
+      const req = mockRequest() as Request;
+      const res = mockResponse() as Response;
+      mockRagService.getAllDocumentIds.mockRejectedValue(new Error('Something went wrong'));
+
+      await getAllDocuments(req, res);
+
+      expect(mockRagService.getAllDocumentIds).toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ error: 'Internal Server Error', details: 'Something went wrong' });
     });
   });
 });

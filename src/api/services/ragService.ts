@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { config } from '../config';
 import Logger from '../logger';
-import { generateEmbeddings } from './llmWrapper';
+import { generateEmbeddings } from '../services/llmWrapper';
 import { mongoService } from './mongoService';
 
 export class RAGService {
@@ -291,6 +291,17 @@ export class RAGService {
     } catch (error) {
       Logger.error(`Error querying chunks for text "${queryText}":`, error);
       throw error;
+    }
+  }
+
+  public async getAllDocumentIds(): Promise<string[]> {
+    try {
+      const ids = await mongoService.getAllDocumentIds();
+      Logger.info(`Retrieved ${ids.length} document IDs from mongoService.`);
+      return ids;
+    } catch (error) {
+      Logger.error('Error retrieving all document IDs via mongoService:', error);
+      throw error; // Re-throw to allow controller to handle
     }
   }
 }

@@ -43,6 +43,12 @@ class MongoService {
     const collection = await this.getParentDocumentCollection();
     await collection.deleteOne({ _id: documentId });
   }
+
+  async getAllDocumentIds(): Promise<string[]> {
+    const collection = await this.getParentDocumentCollection();
+    const documents = await collection.find({}, { projection: { _id: 1 } }).toArray();
+    return documents.map((doc) => doc._id);
+  }
 }
 
 export const mongoService = new MongoService();

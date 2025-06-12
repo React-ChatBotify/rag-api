@@ -10,7 +10,7 @@ dotenv.config();
 const RAG_MANAGEMENT_API_KEY = process.env.RAG_MANAGEMENT_API_KEY;
 const PORT = process.env.PORT ?? 8080;
 const API_VERSION = process.env.API_VERSION ?? 'v1';
-const API_BASE_URL = `http://localhost:${PORT}/api/${API_VERSION}`;
+const API_BASE_URL = `http://api:${PORT}`;
 
 // GitHub Configuration
 const GITHUB_REPO_OWNER = process.env.GITHUB_REPO_OWNER ?? 'react-chatbotify';
@@ -115,14 +115,11 @@ const createDocument = async (documentId: string, gitHubFile: GitHubFile): Promi
   try {
     console.log(`Creating RAG document: ${documentId}`);
     const fileContent = await fetchGitHubFileContent(gitHubFile.download_url);
-    const formData = new FormData();
-    formData.append('documentId', documentId);
-    formData.append('markdownFile', fileContent, {
-      contentType: 'text/markdown',
-      filename: path.basename(documentId),
-    });
-    await apiClient.post(`/api/${API_VERSION}/rag/manage/documents`, formData, {
-      headers: formData.getHeaders(),
+    const markdownContent = fileContent.toString('utf-8');
+
+    await apiClient.post(`/api/${API_VERSION}/rag/manage/documents`, {
+      documentId,
+      markdownContent,
     });
     console.log(`CREATED in RAG: ${documentId}`);
   } catch (error: any) {
@@ -134,13 +131,10 @@ const updateDocument = async (documentId: string, gitHubFile: GitHubFile): Promi
   try {
     console.log(`Updating RAG document: ${documentId}`);
     const fileContent = await fetchGitHubFileContent(gitHubFile.download_url);
-    const formData = new FormData();
-    formData.append('markdownFile', fileContent, {
-      contentType: 'text/markdown',
-      filename: path.basename(documentId),
-    });
-    await apiClient.put(`/api/${API_VERSION}/rag/manage/documents/${documentId}`, formData, {
-      headers: formData.getHeaders(),
+    const markdownContent = fileContent.toString('utf-8');
+
+    await apiClient.put(`/api/${API_VERSION}/rag/manage/documents/${documentId}`, {
+      markdownContent,
     });
     console.log(`UPDATED in RAG: ${documentId}`);
   } catch (error: any) {

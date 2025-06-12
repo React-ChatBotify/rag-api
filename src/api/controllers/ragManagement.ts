@@ -27,6 +27,21 @@ export const createDocument = async (req: Request, res: Response) => {
   }
 };
 
+export const getAllDocuments = async (req: Request, res: Response) => {
+  try {
+    const ragService = await initializedRagService;
+    const documentIds = await ragService.getAllDocumentIds();
+    return res.status(200).json({ documentIds });
+  } catch (error: any) {
+    Logger.error('Error in getAllDocuments:', error);
+    // Check for specific service readiness errors if applicable
+    if (error.message && error.message.includes('ChromaDB collection is not initialized')) {
+      return res.status(503).json({ error: 'Service Unavailable: RAG service is not ready.' });
+    }
+    return res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
 export const getDocument = async (req: Request, res: Response) => {
   try {
     const { documentId } = req.params;
