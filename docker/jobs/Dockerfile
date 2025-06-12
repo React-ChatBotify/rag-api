@@ -24,7 +24,6 @@ COPY --from=dependencies /app/node_modules ./node_modules
 
 # Copy specific necessary files and directories
 COPY ./src ./src
-COPY ./types ./types
 COPY ./config ./config
 COPY ./tsconfig.json ./
 COPY ./package.json ./
