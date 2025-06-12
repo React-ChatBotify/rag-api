@@ -2,8 +2,20 @@ services:
   api:
     build:
       context: ..
-      dockerfile: ./docker/Dockerfile.local
-    command: npm run start:watch
+      dockerfile: ./docker/api/Dockerfile.local
+    command: npm run start:watch-api
+    volumes:
+      - ..:/app
+      - /app/node_modules
+
+  jobs:
+    # build for local dev
+    build:
+      context: ..
+      dockerfile: ./docker/jobs/Dockerfile.local
+    # for hot reloading in local dev
+    command: npm run start:watch-jobs
+    # codebase mounted for local dev
     volumes:
       - ..:/app
       - /app/node_modules

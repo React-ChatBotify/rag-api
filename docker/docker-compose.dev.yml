@@ -1,6 +1,9 @@
 # The development environment runs the live application on the development server.
 services:
   api:
-    image: ${APPLICATION_IMAGE}
+    image: ${APPLICATION_API_IMAGE}
     environment:
       - NODE_ENV=development
+
+  jobs:
+    image: ${APPLICATION_JOBS_IMAGE}

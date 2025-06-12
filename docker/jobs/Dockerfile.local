@@ -1,5 +1,5 @@
-# Stage 1: Install dependencies
-FROM node:23-slim
+# For development purposes, the dev docker file simply mounts the codebase with hot-reloading
+FROM node:24-slim
 
 # Maintainer information
 LABEL org.opencontainers.image.authors="Tan Jin (tjtanjin)"
@@ -10,11 +10,11 @@ WORKDIR /app
 # Copy package.json to the container
 COPY ./package.json ./
 
-# Install the dependencies
+# Install the application dependencies
 RUN npm install
 
 # Copy additional files needed for runtime
-COPY ./nodemon.json ./
+COPY nodemon-jobs.json ./
 
 # Command to run the application with nodemon for development
-CMD ["npm", "run", "start:watch"]
+CMD ["npm", "run", "start:watch-jobs"]

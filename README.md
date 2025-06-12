@@ -54,6 +54,10 @@ React ChatBotify RAG API offers the following features:
 **API Documentation:**
 - `/api/v1/docs`: Interactive Swagger UI for exploring and testing all API endpoints.
 
+**API Key Capabilities:**
+- `RAG_MANAGEMENT_API_KEY`: Can perform both management operations (creating, updating, deleting documents) and query operations.
+- `RAG_QUERY_API_KEY`: Can perform query operations only (generating content or streaming content generation). It cannot be used for management operations.
+
 ### Technologies
 Technologies used by React ChatBotify RAG API are as below:
 

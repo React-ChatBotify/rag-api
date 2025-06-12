@@ -1,0 +1,20 @@
+# Stage 1: Install dependencies
+FROM node:23-slim
+
+# Maintainer information
+LABEL org.opencontainers.image.authors="Tan Jin (tjtanjin)"
+
+# Set the working directory
+WORKDIR /app
+
+# Copy package.json to the container
+COPY ./package.json ./
+
+# Install the dependencies
+RUN npm install
+
+# Copy additional files needed for runtime
+COPY ./nodemon-api.json ./
+
+# Command to run the application with nodemon for development
+CMD ["npm", "run", "start:watch-api"]

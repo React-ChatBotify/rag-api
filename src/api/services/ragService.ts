@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { config } from '../config';
 import Logger from '../logger';
-import { generateEmbeddings } from '../services/llmWrapper';
+import { generateEmbeddings } from './llmWrapper';
 import { mongoService } from './mongoService';
 
 export class RAGService {

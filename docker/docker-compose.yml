@@ -1,6 +1,6 @@
 services:
   api:
-    container_name: rag-api
+    container_name: rag-api-core
     environment:
       - NODE_ENV=local
     ports:
@@ -9,6 +9,16 @@ services:
       - chromadb
     env_file:
       - ../config/env/.env
+    networks:
+      - core-network
+
+  # runs scheduled jobs on the platform
+  jobs:
+    container_name: rag-api-jobs
+    env_file:
+      - ../config/env/.env
+    depends_on:
+      - api
     networks:
       - core-network
 
