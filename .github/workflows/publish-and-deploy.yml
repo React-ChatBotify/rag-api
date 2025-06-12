@@ -51,17 +51,6 @@ jobs:
             exit 1
           fi
 
-      - name: Detect changed paths
-        id: changes
-        uses: dorny/paths-filter@v3
-        # todo: find a way to detect changes within same branch, for now do not push to dev/prod in parallel
-        with:
-          filters: |
-            api:
-              - 'src/api/**'
-            jobs:
-              - 'src/jobs/**'
-
       - name: Backup existing API image
         # Pulls the current image using the target tag and backup it with a previous tag if it exists.
         if: steps.changes.outputs.api == 'true'
