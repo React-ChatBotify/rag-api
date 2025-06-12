@@ -1,8 +1,6 @@
 import axios, { AxiosResponse } from 'axios';
 import dotenv from 'dotenv';
-import FormData from 'form-data';
 import { Octokit } from 'octokit';
-import path from 'path';
 
 dotenv.config();
 
